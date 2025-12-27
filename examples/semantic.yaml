@@ -1,0 +1,137 @@
+# Example semantic layer YAML configuration
+version: 1.0
+catalog: my_catalog
+warehouse: s3://my-warehouse
+
+# ============================================
+# TABLES - Physical table definitions
+# ============================================
+tables:
+  - name: orders
+    namespace: sales
+    description: "Order data with customer and product information"
+    
+    columns:
+      - name: order_id
+        type: long
+        description: "Unique order identifier"
+        primary_key: true
+        partition: false
+        pii: false
+        
+      - name: customer_id
+        type: long
+        description: "Customer identifier"
+        pii: false
+        
+      - name: order_date
+        type: timestamp
+        description: "Order timestamp"
+        partition: true
+        
+      - name: amount
+        type: decimal
+        description: "Order amount in USD"
+        
+      - name: status
+        type: string
+        description: "Order status (completed, pending, cancelled)"
+
+# ============================================
+# DIMENSIONS - How to slice/filter data
+# ============================================
+dimensions:
+  - name: customer_segment
+    description: "Customer tier classification"
+    table: orders
+    column: customer_segment
+    type: categorical
+    values:
+      "new": "New Customer"
+      "returning": "Returning Customer"
+      "vip": "VIP Customer"
+      
+  - name: order_date
+    description: "Order timestamp"
+    table: orders
+    column: order_date
+    type: datetime
+    granularities:
+      - day
+      - week
+      - month
+      - quarter
+      - year
+    time_travel: true
+
+# ============================================
+# METRICS - Business calculations
+# ============================================
+metrics:
+  - name: total_revenue
+    description: "Total revenue from completed orders"
+    type: sum
+    expression:
+      table: orders
+      aggregation: sum
+      column: amount
+      filters:
+        - column: status
+          operator: "=="
+          value: "completed"
+    unit: "USD"
+    format: "${:,.2f}"
+    
+  - name: order_count
+    description: "Number of orders"
+    type: count
+    expression:
+      table: orders
+      aggregation: count
+      column: order_id
+      
+  - name: avg_order_value
+    description: "Average order value"
+    type: avg
+    expression:
+      table: orders
+      aggregation: avg
+      column: amount
+      filters:
+        - column: status
+          operator: "=="
+          value: "completed"
+    unit: "USD"
+    format: "${:,.2f}"
+
+# ============================================
+# GOVERNANCE - Security & compliance
+# ============================================
+governance:
+  pii_policy:
+    mask_by_default: true
+    allowed_roles: ["admin"]
+    mask_char: "*"
+    
+  roles:
+    - name: sales
+      can_access_metrics:
+        - order_count
+      cannot_access_metrics:
+        - total_revenue
+        
+    - name: finance
+      can_access_metrics:
+        - total_revenue
+        - order_count
+        - avg_order_value
+        
+  audit:
+    enabled: true
+    log_location: ./audit.log
+    retention_days: 365
+    
+  limits:
+    max_rows_per_query: 10000
+    query_timeout_seconds: 300
+
