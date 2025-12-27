@@ -116,7 +116,6 @@ class QueryTool(IcebergBaseTool):
                     if filter_expr is not None:
                         scan_builder = scan_builder.filter(filter_expr)
                 except Exception as e:
-                    from langchain_iceberg.exceptions import IcebergInvalidFilterError
                     raise IcebergInvalidFilterError(
                         f"Failed to apply filter '{filters}': {str(e)}"
                     ) from e

@@ -5,6 +5,8 @@ from typing import Any, List, Optional
 import pandas as pd
 
 from langchain_iceberg.exceptions import (
+    IcebergInvalidFilterError,
+    IcebergInvalidQueryError,
     IcebergSnapshotNotFoundError,
     IcebergTableNotFoundError,
 )

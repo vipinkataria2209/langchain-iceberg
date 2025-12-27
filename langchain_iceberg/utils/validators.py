@@ -27,13 +27,16 @@ def validate_table_id(table_id: str) -> tuple[str, str]:
     if not table_id or not isinstance(table_id, str):
         raise IcebergInvalidQueryError(f"Invalid table_id: {table_id}")
     
-    parts = table_id.split(".", 1)
-    if len(parts) != 2:
+    # Split on last dot to support multi-part namespaces (e.g., "analytics.prod.events")
+    if "." not in table_id:
         raise IcebergInvalidQueryError(
             f"table_id must be in format 'namespace.table_name', got: {table_id}"
         )
     
-    namespace, table_name = parts
+    # Find last dot to split namespace and table
+    last_dot_index = table_id.rfind(".")
+    namespace = table_id[:last_dot_index]
+    table_name = table_id[last_dot_index + 1:]
     if not namespace or not table_name:
         raise IcebergInvalidQueryError(
             f"table_id must have both namespace and table_name, got: {table_id}"
