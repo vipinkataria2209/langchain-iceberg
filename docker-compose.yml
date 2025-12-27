@@ -1,28 +1,4 @@
-version: '3.8'
-
 services:
-  # REST Catalog Server for Iceberg
-  rest-catalog:
-    image: tabulario/iceberg-rest:latest
-    container_name: iceberg-rest-catalog
-    ports:
-      - "8181:8181"
-    environment:
-      - CATALOG_WAREHOUSE=s3://warehouse/wh/
-      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
-      - CATALOG_S3_ENDPOINT=http://minio:9000
-      - CATALOG_S3_ACCESS_KEY_ID=admin
-      - CATALOG_S3_SECRET_ACCESS_KEY=password
-      - CATALOG_S3_PATH_STYLE_ACCESS=true
-      - CATALOG_S3_REGION=us-east-1
-      - AWS_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=admin
-      - AWS_SECRET_ACCESS_KEY=password
-    depends_on:
-      - minio
-    networks:
-      - iceberg-network
-
   # MinIO for S3-compatible storage
   minio:
     image: minio/minio:latest
@@ -38,6 +14,46 @@ services:
       - minio-data:/data
     networks:
       - iceberg-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 40s
+
+  # REST Catalog Server for Iceberg
+  rest-catalog:
+    image: tabulario/iceberg-rest:latest
+    container_name: iceberg-rest-catalog
+    ports:
+      - "8181:8181"
+    environment:
+      - CATALOG_WAREHOUSE=s3://warehouse/wh/
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - CATALOG_S3_ENDPOINT=http://minio:9000
+      - CATALOG_S3_ACCESS_KEY_ID=admin
+      - CATALOG_S3_SECRET_ACCESS_KEY=password
+      - CATALOG_S3_PATH_STYLE_ACCESS=true
+      - CATALOG_S3_REGION=us-east-1
+      - CATALOG_S3_USE_INSTANCE_CREDENTIALS=false
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - JAVA_OPTS=-Djava.net.preferIPv4Stack=true -Djava.net.useSystemProxies=false
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - iceberg-network
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8181/v1/config"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 
 networks:

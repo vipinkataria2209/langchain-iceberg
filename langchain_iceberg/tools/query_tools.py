@@ -93,7 +93,7 @@ class QueryTool(IcebergBaseTool):
                     f"Query timeout exceeded ({self.query_timeout_seconds}s)"
                 )
             
-            # Build scan
+            # Build scan with limit
             scan_builder = table.scan()
             
             # Apply column selection
@@ -107,7 +107,7 @@ class QueryTool(IcebergBaseTool):
                         f"Invalid columns: {invalid_columns}. "
                         f"Available columns: {sorted(schema_columns)}"
                     )
-                scan_builder = scan_builder.select(columns)
+                scan_builder = scan_builder.select(*columns)
             
             # Apply filters
             if filters:
@@ -119,9 +119,6 @@ class QueryTool(IcebergBaseTool):
                     raise IcebergInvalidFilterError(
                         f"Failed to apply filter '{filters}': {str(e)}"
                     ) from e
-            
-            # Apply limit
-            scan_builder = scan_builder.limit(limit)
             
             # Execute scan with timeout monitoring
             scan = scan_builder
@@ -137,6 +134,9 @@ class QueryTool(IcebergBaseTool):
             # Convert to pandas
             if arrow_table and len(arrow_table) > 0:
                 df = arrow_table.to_pandas()
+                # Apply limit after fetching (PyIceberg doesn't support limit in scan builder)
+                if limit is not None and limit > 0 and len(df) > limit:
+                    df = df.head(limit)
             else:
                 df = pd.DataFrame()
             

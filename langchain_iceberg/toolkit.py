@@ -171,6 +171,16 @@ class IcebergToolkit:
                     "Nessie catalog requires 'uri' in catalog_config"
                 )
             properties["uri"] = uri
+        elif catalog_type == "sql":
+            uri = self.catalog_config.get("uri")
+            if not uri:
+                raise IcebergConnectionError(
+                    "SQL catalog requires 'uri' in catalog_config"
+                )
+            properties["uri"] = uri
+        elif catalog_type == "in-memory":
+            # In-memory catalog doesn't need special config
+            pass
         
         # Add any additional properties from config
         for key, value in self.catalog_config.items():

@@ -229,12 +229,11 @@ class TimeTravelTool(IcebergBaseTool):
                 schema_columns = {field.name for field in schema.fields}
                 invalid_columns = set(columns) - schema_columns
                 if invalid_columns:
-                    from langchain_iceberg.exceptions import IcebergInvalidQueryError
                     raise IcebergInvalidQueryError(
                         f"Invalid columns: {invalid_columns}. "
                         f"Available columns: {sorted(schema_columns)}"
                     )
-                scan_builder = scan_builder.select(columns)
+                scan_builder = scan_builder.select(*columns)
             
             # Apply filters
             if filters:
@@ -244,21 +243,21 @@ class TimeTravelTool(IcebergBaseTool):
                     if filter_expr is not None:
                         scan_builder = scan_builder.filter(filter_expr)
                 except Exception as e:
-                    from langchain_iceberg.exceptions import IcebergInvalidFilterError
                     raise IcebergInvalidFilterError(
                         f"Failed to apply filter '{filters}': {str(e)}"
                     ) from e
             
-            # Apply limit
-            scan_builder = scan_builder.limit(limit)
-            
             # Execute scan
+            # Note: limit is applied via pandas after fetching data
             scan = scan_builder
             arrow_table = scan.to_arrow()
             
             # Convert to pandas
             if arrow_table and len(arrow_table) > 0:
                 df = arrow_table.to_pandas()
+                # Apply limit after fetching (PyIceberg doesn't support limit in scan builder)
+                if limit is not None and limit > 0 and len(df) > limit:
+                    df = df.head(limit)
             else:
                 df = pd.DataFrame()
             
