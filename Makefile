@@ -1,4 +1,4 @@
-.PHONY: help up down restart logs test init clean
+.PHONY: help up down restart logs test init clean clean-build
 
 help:
 	@echo "Available commands:"
@@ -10,6 +10,7 @@ help:
 	@echo "  make test           - Run unit tests"
 	@echo "  make integration_test - Run integration tests"
 	@echo "  make clean          - Stop services and remove volumes"
+	@echo "  make clean-build    - Remove build artifacts (dist/, build/, *.egg-info)"
 
 up:
 	docker-compose up -d
@@ -39,4 +40,9 @@ integration_test:
 clean:
 	docker-compose down -v
 	@echo "All services and data removed"
+
+clean-build:
+	@echo "Cleaning build artifacts..."
+	rm -rf dist/ build/ *.egg-info
+	@echo "Build artifacts removed"
 
