@@ -138,8 +138,8 @@ dmypy.json
 # Project specific
 *.log
 audit.log
-test_comprehensive_integration.py
-test_real_queries.py
+test_*.py
+spark-warehouse/
 
 # Docker
 .dockerignore
