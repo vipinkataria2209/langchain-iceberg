@@ -12,20 +12,20 @@ class DateRangeParser:
     def parse(date_range: str) -> Tuple[Optional[datetime], Optional[datetime]]:
         """
         Parse a date range string into start and end datetimes.
-        
+
         Supports formats:
         - "Q4_2024" - Quarter
         - "last_30_days" - Relative days
         - "2024-01-01:2024-12-31" - Date range
         - "2024-12-01" - Single date
         - "this_month", "last_month", "this_quarter", "last_quarter", "this_year", "last_year"
-        
+
         Args:
             date_range: Date range string
-            
+
         Returns:
             Tuple of (start_datetime, end_datetime). Either can be None.
-            
+
         Raises:
             ValueError: If date range cannot be parsed
         """
@@ -38,13 +38,13 @@ class DateRangeParser:
             year = int(quarter_match.group(2))
             start_month = (quarter - 1) * 3 + 1
             end_month = quarter * 3
-            
+
             start = datetime(year, start_month, 1)
             if end_month == 12:
                 end = datetime(year + 1, 1, 1) - timedelta(seconds=1)
             else:
                 end = datetime(year, end_month + 1, 1) - timedelta(seconds=1)
-            
+
             return start, end
 
         # Relative days: last_30_days, last_7_days, etc.
@@ -80,12 +80,12 @@ class DateRangeParser:
 
         # Relative periods
         now = datetime.now()
-        
+
         if date_range == "this_month":
             start = now.replace(day=1, hour=0, minute=0, second=0)
             end = now
             return start, end
-        
+
         elif date_range == "last_month":
             if now.month == 1:
                 start = datetime(now.year - 1, 12, 1)
@@ -94,14 +94,14 @@ class DateRangeParser:
                 start = datetime(now.year, now.month - 1, 1)
                 end = datetime(now.year, now.month, 1) - timedelta(seconds=1)
             return start, end
-        
+
         elif date_range == "this_quarter":
             current_quarter = (now.month - 1) // 3 + 1
             start_month = (current_quarter - 1) * 3 + 1
             start = datetime(now.year, start_month, 1)
             end = now
             return start, end
-        
+
         elif date_range == "last_quarter":
             current_quarter = (now.month - 1) // 3 + 1
             if current_quarter == 1:
@@ -118,12 +118,12 @@ class DateRangeParser:
             else:
                 end = datetime(year, end_month + 1, 1) - timedelta(seconds=1)
             return start, end
-        
+
         elif date_range == "this_year":
             start = datetime(now.year, 1, 1)
             end = now
             return start, end
-        
+
         elif date_range == "last_year":
             start = datetime(now.year - 1, 1, 1)
             end = datetime(now.year, 1, 1) - timedelta(seconds=1)
@@ -140,12 +140,12 @@ class DateRangeParser:
     def format_for_filter(start: datetime, end: datetime, column_name: str) -> str:
         """
         Format date range as a filter expression.
-        
+
         Args:
             start: Start datetime
             end: End datetime
             column_name: Name of date column
-            
+
         Returns:
             Filter expression string
         """

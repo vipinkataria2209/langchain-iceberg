@@ -24,11 +24,11 @@ class MetricTool(IcebergBaseTool):
     ):
         """Initialize metric tool with metric configuration."""
         metric_name = metric_config["name"]
-        
+
         # Set name and description before calling super()
         tool_name = f"get_{metric_name}"
         tool_description = self._build_description(metric_config)
-        
+
         # Initialize with name and description
         super().__init__(
             catalog=catalog,
@@ -36,7 +36,7 @@ class MetricTool(IcebergBaseTool):
             description=tool_description,
             **kwargs
         )
-        
+
         # Store configs as instance variables (not Pydantic fields)
         object.__setattr__(self, "metric_config", metric_config)
         object.__setattr__(self, "semantic_config", semantic_config)
@@ -46,12 +46,12 @@ class MetricTool(IcebergBaseTool):
         """Build tool description from metric config."""
         metric_name = metric_config.get("name", "metric")
         desc = metric_config.get("description", f"Get {metric_name}")
-        
+
         # Add parameter descriptions
         desc += "\n\nInputs:"
         desc += "\n  date_range (optional): Date range (e.g., 'Q4_2024', 'last_30_days', '2024-01-01:2024-12-31')"
         desc += "\n  group_by (optional): Dimension to group by (e.g., 'customer_segment')"
-        
+
         return desc
 
     def _run(
@@ -190,11 +190,11 @@ class MetricTool(IcebergBaseTool):
             field_type = str(field.field_type).lower()
             if "timestamp" in field_type or "date" in field_type:
                 return field.name
-        
+
         # Check if expression specifies a date column
         if "date_column" in expr:
             return expr["date_column"]
-        
+
         return None
 
     def _build_filters_from_config(self, filters_config: List[dict], table: Any) -> Any:
@@ -256,11 +256,11 @@ class MetricToolGenerator:
     ) -> List[MetricTool]:
         """
         Generate metric tools from semantic configuration.
-        
+
         Args:
             catalog: PyIceberg catalog instance
             semantic_config: Parsed semantic YAML configuration
-            
+
         Returns:
             List of MetricTool instances
         """

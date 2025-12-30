@@ -16,14 +16,14 @@ def main():
     print("=" * 70)
     print("Natural Language Query Example")
     print("=" * 70)
-    
+
     # Check for API key
     if not os.getenv("OPENAI_API_KEY"):
         print("\n⚠️  OPENAI_API_KEY not set.")
         print("   Set it to run this example:")
         print("   export OPENAI_API_KEY='your-key-here'")
         return
-    
+
     # 1. Initialize toolkit
     print("\n[1/3] Setting up toolkit...")
     toolkit = IcebergToolkit(
@@ -42,10 +42,10 @@ def main():
         # Optional: Add semantic layer
         # semantic_yaml="examples/semantic.yaml",
     )
-    
+
     tools = toolkit.get_tools()
     print(f"✅ Toolkit ready with {len(tools)} tools")
-    
+
     # 2. Create agent
     print("\n[2/3] Creating LangChain agent...")
     llm = ChatOpenAI(model="gpt-4", temperature=0)
@@ -58,11 +58,11 @@ def main():
         handle_parsing_errors=True,
     )
     print("✅ Agent ready")
-    
+
     # 3. Ask questions!
     print("\n[3/3] Ask questions in natural language:")
     print("=" * 70)
-    
+
     questions = [
         "What namespaces are available?",
         "List all tables in the test namespace",
@@ -70,7 +70,7 @@ def main():
         "What are the top 10 orders by amount?",
         "How many orders are there?",
     ]
-    
+
     for question in questions:
         print(f"\n❓ Question: {question}")
         print("-" * 70)
@@ -80,13 +80,13 @@ def main():
         except Exception as e:
             print(f"❌ Error: {e}")
         print()
-    
+
     # Interactive mode
     print("\n" + "=" * 70)
     print("Interactive Mode - Ask your own questions!")
     print("Type 'exit' to quit")
     print("=" * 70)
-    
+
     while True:
         try:
             question = input("\n❓ Your question: ").strip()
@@ -94,7 +94,7 @@ def main():
                 break
             if not question:
                 continue
-            
+
             result = agent_executor.invoke({"input": question})
             print(f"\n✅ Answer: {result['output']}")
         except KeyboardInterrupt:

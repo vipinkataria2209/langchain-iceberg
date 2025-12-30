@@ -15,7 +15,7 @@ class SemanticLoader:
     def __init__(self, yaml_path: str):
         """
         Initialize semantic loader.
-        
+
         Args:
             yaml_path: Path to YAML file (local file path or S3/ADLS/GCS URI)
         """
@@ -25,10 +25,10 @@ class SemanticLoader:
     def load(self) -> Dict[str, Any]:
         """
         Load and parse YAML configuration.
-        
+
         Returns:
             Parsed configuration dictionary
-            
+
         Raises:
             SemanticYAMLError: If YAML is invalid or cannot be loaded
         """
@@ -85,13 +85,13 @@ class SemanticLoader:
     def validate_schema(self, config: Dict[str, Any]) -> bool:
         """
         Validate YAML schema against expected structure.
-        
+
         Args:
             config: Configuration dictionary to validate
-            
+
         Returns:
             True if valid
-            
+
         Raises:
             SemanticYAMLError: If schema is invalid
         """
@@ -124,7 +124,7 @@ class SemanticLoader:
         if "metrics" in config:
             if not isinstance(config["metrics"], list):
                 raise SemanticYAMLError("'metrics' must be a list")
-            
+
             metric_names = []
             for i, metric in enumerate(config["metrics"]):
                 if not isinstance(metric, dict):
@@ -135,7 +135,7 @@ class SemanticLoader:
                     raise SemanticYAMLError(f"Metric at index {i} missing 'description' field")
                 if "type" not in metric:
                     raise SemanticYAMLError(f"Metric at index {i} missing 'type' field")
-                
+
                 metric_name = metric["name"]
                 if metric_name in metric_names:
                     raise SemanticYAMLError(f"Duplicate metric name: {metric_name}")
@@ -170,14 +170,14 @@ class SemanticLoader:
         if "dimensions" in config:
             if not isinstance(config["dimensions"], list):
                 raise SemanticYAMLError("'dimensions' must be a list")
-            
+
             dimension_names = []
             for i, dimension in enumerate(config["dimensions"]):
                 if not isinstance(dimension, dict):
                     raise SemanticYAMLError(f"Dimension at index {i} must be a dictionary")
                 if "name" not in dimension:
                     raise SemanticYAMLError(f"Dimension at index {i} missing 'name' field")
-                
+
                 dimension_name = dimension["name"]
                 if dimension_name in dimension_names:
                     raise SemanticYAMLError(f"Duplicate dimension name: {dimension_name}")
@@ -197,7 +197,7 @@ class SemanticLoader:
     def get_metrics(self) -> List[Dict[str, Any]]:
         """
         Get all metric definitions.
-        
+
         Returns:
             List of metric dictionaries
         """
@@ -208,7 +208,7 @@ class SemanticLoader:
     def get_dimensions(self) -> List[Dict[str, Any]]:
         """
         Get all dimension definitions.
-        
+
         Returns:
             List of dimension dictionaries
         """
@@ -219,7 +219,7 @@ class SemanticLoader:
     def get_tables(self) -> List[Dict[str, Any]]:
         """
         Get all table definitions.
-        
+
         Returns:
             List of table dictionaries
         """
@@ -230,7 +230,7 @@ class SemanticLoader:
     def get_governance(self) -> Dict[str, Any]:
         """
         Get governance configuration.
-        
+
         Returns:
             Governance configuration dictionary
         """

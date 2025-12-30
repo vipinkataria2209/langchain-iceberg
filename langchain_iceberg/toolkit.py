@@ -26,10 +26,10 @@ from langchain_iceberg.utils.governance import (
 class IcebergToolkit:
     """
     Main toolkit class for LangChain Iceberg integration.
-    
+
     This toolkit provides tools for interacting with Apache Iceberg tables
     through the PyIceberg API, enabling natural language queries via LLM agents.
-    
+
     Example:
         >>> from langchain_iceberg import IcebergToolkit
         >>> toolkit = IcebergToolkit(
@@ -54,7 +54,7 @@ class IcebergToolkit:
     ) -> None:
         """
         Initialize the Iceberg toolkit.
-        
+
         Args:
             catalog_name: Name of the catalog to use
             catalog_config: Configuration dictionary for the catalog.
@@ -67,7 +67,7 @@ class IcebergToolkit:
             llm: Optional LLM instance for query planning (not yet implemented)
             enable_time_travel: Enable time-travel tools (default: True)
             enable_snapshots: Enable snapshot tools (default: True)
-            
+
         Raises:
             IcebergConnectionError: If catalog connection fails
         """
@@ -77,7 +77,7 @@ class IcebergToolkit:
         self.llm = llm
         self.enable_time_travel = enable_time_travel
         self.enable_snapshots = enable_snapshots
-        
+
         # Initialize catalog connection
         try:
             self.catalog = self._initialize_catalog()
@@ -85,7 +85,7 @@ class IcebergToolkit:
             raise IcebergConnectionError(
                 f"Failed to connect to Iceberg catalog '{catalog_name}': {str(e)}"
             ) from e
-        
+
         # Validate connection by listing namespaces
         try:
             _ = list(self.catalog.list_namespaces())
@@ -93,7 +93,7 @@ class IcebergToolkit:
             raise IcebergConnectionError(
                 f"Catalog connection validation failed: {str(e)}"
             ) from e
-        
+
         # Load semantic layer if provided
         self.semantic_config = None
         if semantic_yaml:
@@ -105,16 +105,16 @@ class IcebergToolkit:
                 raise SemanticYAMLError(
                     f"Failed to load semantic YAML: {str(e)}"
                 ) from e
-        
+
         # Initialize governance components
         governance_config = {}
         if self.semantic_config:
             governance_config = self.semantic_config.get("governance", {})
-        
+
         self.access_control = AccessControlValidator(governance_config)
         self.pii_masker = PIIMasker(governance_config)
         self.audit_logger = AuditLogger(governance_config)
-        
+
         # Get limits from governance config
         limits_config = governance_config.get("limits", {})
         self.query_timeout_seconds = limits_config.get("query_timeout_seconds", 60)
@@ -123,10 +123,10 @@ class IcebergToolkit:
     def _initialize_catalog(self) -> Catalog:
         """
         Initialize PyIceberg catalog from configuration.
-        
+
         Returns:
             PyIceberg Catalog instance
-            
+
         Raises:
             IcebergConnectionError: If catalog initialization fails
         """
@@ -135,19 +135,19 @@ class IcebergToolkit:
             raise IcebergConnectionError(
                 "catalog_config must include 'type' field"
             )
-        
+
         # Extract warehouse location
         warehouse = self.catalog_config.get("warehouse")
         if not warehouse:
             raise IcebergConnectionError(
                 "catalog_config must include 'warehouse' field"
             )
-        
+
         # Build catalog properties
         properties = {
             "warehouse": warehouse,
         }
-        
+
         # Add catalog-specific properties
         if catalog_type == "rest":
             uri = self.catalog_config.get("uri")
@@ -181,12 +181,12 @@ class IcebergToolkit:
         elif catalog_type == "in-memory":
             # In-memory catalog doesn't need special config
             pass
-        
+
         # Add any additional properties from config
         for key, value in self.catalog_config.items():
             if key not in ("type", "warehouse", "uri", "region"):
                 properties[key] = value
-        
+
         try:
             catalog = load_catalog(
                 name=self.catalog_name,
@@ -202,17 +202,17 @@ class IcebergToolkit:
     def get_tools(self) -> List[BaseTool]:
         """
         Get all available tools for the toolkit.
-        
+
         Returns:
             List of BaseTool instances
         """
         tools: List[BaseTool] = []
-        
+
         # Core catalog tools
         tools.append(ListNamespacesTool(catalog=self.catalog))
         tools.append(ListTablesTool(catalog=self.catalog))
         tools.append(GetSchemaTool(catalog=self.catalog))
-        
+
         # Query tools
         tools.append(
             QueryTool(
@@ -221,17 +221,17 @@ class IcebergToolkit:
                 max_rows_per_query=self.max_rows_per_query,
             )
         )
-        
+
         # Query planner tool (if LLM provided)
         if self.llm:
             tools.append(QueryPlannerTool(catalog=self.catalog, llm=self.llm))
-        
+
         # Time-travel tools (if enabled)
         if self.enable_snapshots:
             tools.append(SnapshotTool(catalog=self.catalog))
         if self.enable_time_travel:
             tools.append(TimeTravelTool(catalog=self.catalog))
-        
+
         # Semantic layer tools (if YAML provided)
         if self.semantic_config:
             semantic_tools = MetricToolGenerator.generate_tools(
@@ -239,13 +239,13 @@ class IcebergToolkit:
                 semantic_config=self.semantic_config,
             )
             tools.extend(semantic_tools)
-        
+
         return tools
 
     def get_context(self) -> Dict[str, Any]:
         """
         Get context information for prompts.
-        
+
         Returns:
             Dictionary with context information
         """
@@ -255,7 +255,7 @@ class IcebergToolkit:
             "warehouse": self.catalog_config.get("warehouse"),
             "has_semantic_layer": self.semantic_config is not None,
         }
-        
+
         # Add namespace and table information if available
         try:
             namespaces = list(self.catalog.list_namespaces())
@@ -265,6 +265,6 @@ class IcebergToolkit:
             ]
         except Exception:
             context["namespaces"] = []
-        
+
         return context
 

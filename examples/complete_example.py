@@ -107,26 +107,26 @@ print("=" * 70)
 # Note: Requires OPENAI_API_KEY environment variable
 try:
     llm = ChatOpenAI(model="gpt-4", temperature=0)
-    
+
     agent = create_react_agent(llm, tools)
     agent_executor = AgentExecutor(
         agent=agent,
         tools=tools,
         verbose=True
     )
-    
+
     print("\n4.1 Asking agent a question...")
     result = agent_executor.invoke({
         "input": "What tables are available in the test namespace?"
     })
     print(f"\nAgent Response:\n{result['output']}")
-    
+
     print("\n4.2 Complex query...")
     result = agent_executor.invoke({
         "input": "Show me the schema for the customers table if it exists"
     })
     print(f"\nAgent Response:\n{result['output']}")
-    
+
 except Exception as e:
     print(f"  (LangChain agent setup failed: {e})")
     print("  Note: Set OPENAI_API_KEY environment variable to use agents")
@@ -156,21 +156,21 @@ try:
         },
         semantic_yaml="examples/semantic.yaml",
     )
-    
+
     semantic_tools = semantic_toolkit.get_tools()
     metric_tools = [t for t in semantic_tools if t.name.startswith("get_")]
-    
+
     print(f"✓ Semantic toolkit initialized")
     print(f"✓ Found {len(metric_tools)} metric tools:")
     for tool in metric_tools:
         print(f"  - {tool.name}")
-    
+
     # Use metric tool
     if metric_tools:
         print(f"\n5.1 Using metric tool: {metric_tools[0].name}")
         # Note: This will fail if tables don't exist, but shows the API
         print("  (Tool ready to use when tables exist)")
-        
+
 except Exception as e:
     print(f"  (Semantic layer setup: {e})")
 
@@ -185,11 +185,11 @@ print("=" * 70)
 try:
     snapshots = next(t for t in tools if t.name == "iceberg_snapshots")
     time_travel = next(t for t in tools if t.name == "iceberg_time_travel")
-    
+
     print("6.1 Listing snapshots...")
     result = snapshots.run({"table_id": "test.orders"})
     print(result)
-    
+
     print("\n6.2 Time-travel query...")
     result = time_travel.run({
         "table_id": "test.orders",
@@ -197,7 +197,7 @@ try:
         "limit": 5
     })
     print(result)
-    
+
 except Exception as e:
     print(f"  (Time-travel requires tables: {e})")
 

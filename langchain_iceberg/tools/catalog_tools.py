@@ -20,10 +20,10 @@ class ListNamespacesTool(IcebergBaseTool):
     description: str = """
     Lists all namespaces (databases) available in the Iceberg catalog.
     Use this to discover what data is available before querying.
-    
+
     Input: None
     Output: List of namespace names
-    
+
     Example usage:
     - iceberg_list_namespaces()
     """
@@ -54,10 +54,10 @@ class ListTablesTool(IcebergBaseTool):
     name: str = "iceberg_list_tables"
     description: str = """
     Lists all tables in a specific namespace.
-    
+
     Input: namespace (string) - The namespace to list tables from
     Output: List of table names
-    
+
     Example usage:
     - iceberg_list_tables(namespace="sales")
     - iceberg_list_tables(namespace="analytics.prod")
@@ -67,13 +67,13 @@ class ListTablesTool(IcebergBaseTool):
         """Execute the tool."""
         try:
             namespace = validate_namespace(namespace)
-            
+
             # Handle nested namespaces (convert string to tuple if needed)
             if isinstance(namespace, str) and "." in namespace:
                 namespace_tuple = tuple(namespace.split("."))
             else:
                 namespace_tuple = (namespace,) if isinstance(namespace, str) else namespace
-            
+
             try:
                 tables = list(self.catalog.list_tables(namespace_tuple))
                 # Format table names
@@ -111,10 +111,10 @@ class GetSchemaTool(IcebergBaseTool):
     - Column names and types
     - Partition specification
     - Sample rows (first 3)
-    
+
     Input: table_id (string) - Format: "namespace.table_name"
     Output: Schema details and sample data
-    
+
     Example usage:
     - iceberg_get_schema(table_id="sales.orders")
     - iceberg_get_schema(table_id="analytics.prod.events")
@@ -124,7 +124,7 @@ class GetSchemaTool(IcebergBaseTool):
         """Execute the tool."""
         try:
             namespace, table_name = validate_table_id(table_id)
-            
+
             # Load table
             try:
                 namespace_tuple = tuple(namespace.split("."))
@@ -135,10 +135,10 @@ class GetSchemaTool(IcebergBaseTool):
                         f"Table '{table_id}' not found: {str(e)}"
                     ) from e
                 raise
-            
+
             # Get schema
             schema = table.schema()
-            
+
             # Extract column information
             columns = []
             for field in schema.fields:
@@ -146,12 +146,12 @@ class GetSchemaTool(IcebergBaseTool):
                     "name": field.name,
                     "type": str(field.field_type),
                 })
-            
+
             # Get partition specification
             partitions = []
             if table.spec() and table.spec().fields:
                 partitions = [field.name for field in table.spec().fields]
-            
+
             # Get sample data (first 3 rows)
             sample_data = None
             try:
@@ -163,7 +163,7 @@ class GetSchemaTool(IcebergBaseTool):
             except Exception:
                 # If sample data fails, continue without it
                 pass
-            
+
             return ResultFormatter.format_schema(
                 columns=columns,
                 partitions=partitions if partitions else None,

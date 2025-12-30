@@ -24,11 +24,11 @@ print(f"\nMetric tools: {[t.name for t in metric_tools]}")
 # Use a metric tool directly
 if metric_tools:
     revenue_tool = next(t for t in metric_tools if "revenue" in t.name)
-    
+
     # Get total revenue
     result = revenue_tool.run({"date_range": "Q4_2024"})
     print(f"\n{result}")
-    
+
     # Get revenue by date range
     result = revenue_tool.run({"date_range": "last_30_days"})
     print(f"\n{result}")

@@ -22,20 +22,20 @@ class QueryTool(IcebergBaseTool):
     name: str = "iceberg_query"
     description: str = """
     Execute a query on an Iceberg table using PyIceberg scan API.
-    
+
     Inputs:
         table_id (required): Format "namespace.table_name"
         columns (optional): List of columns to select (default: all columns)
         filters (optional): Filter expression (e.g., "status = 'completed' AND amount > 100")
         limit (optional): Max rows to return (default: 100)
-        
+
     Output: Query results as formatted table
-    
+
     Filter operators supported:
     - =, !=, >, >=, <, <=
     - AND, OR
     - String values should be in quotes: 'value'
-    
+
     Example usage:
     - iceberg_query(table_id="sales.orders", limit=10)
     - iceberg_query(table_id="sales.orders", columns=["order_id", "amount"], filters="amount > 100")
@@ -64,17 +64,17 @@ class QueryTool(IcebergBaseTool):
     ) -> str:
         """Execute the tool."""
         start_time = time.time()
-        
+
         try:
             namespace, table_name = validate_table_id(table_id)
             filters = validate_filter_expression(filters)
-            
+
             # Validate limit
             if limit <= 0:
                 raise IcebergInvalidQueryError(f"Limit must be positive, got: {limit}")
             if limit > self.max_rows_per_query:
                 limit = self.max_rows_per_query
-            
+
             # Load table
             try:
                 namespace_tuple = tuple(namespace.split("."))
@@ -85,17 +85,17 @@ class QueryTool(IcebergBaseTool):
                         f"Table '{table_id}' not found: {str(e)}"
                     ) from e
                 raise
-            
+
             # Check timeout
             elapsed = time.time() - start_time
             if elapsed > self.query_timeout_seconds:
                 raise IcebergInvalidQueryError(
                     f"Query timeout exceeded ({self.query_timeout_seconds}s)"
                 )
-            
+
             # Build scan with limit
             scan_builder = table.scan()
-            
+
             # Apply column selection
             if columns:
                 # Validate columns exist in schema
@@ -108,7 +108,7 @@ class QueryTool(IcebergBaseTool):
                         f"Available columns: {sorted(schema_columns)}"
                     )
                 scan_builder = scan_builder.select(*columns)
-            
+
             # Apply filters
             if filters:
                 try:
@@ -119,18 +119,18 @@ class QueryTool(IcebergBaseTool):
                     raise IcebergInvalidFilterError(
                         f"Failed to apply filter '{filters}': {str(e)}"
                     ) from e
-            
+
             # Execute scan with timeout monitoring
             scan = scan_builder
             arrow_table = scan.to_arrow()
-            
+
             # Check timeout again after execution
             elapsed = time.time() - start_time
             if elapsed > self.query_timeout_seconds:
                 raise IcebergInvalidQueryError(
                     f"Query execution exceeded timeout ({self.query_timeout_seconds}s)"
                 )
-            
+
             # Convert to pandas
             if arrow_table and len(arrow_table) > 0:
                 df = arrow_table.to_pandas()
@@ -139,19 +139,19 @@ class QueryTool(IcebergBaseTool):
                     df = df.head(limit)
             else:
                 df = pd.DataFrame()
-            
+
             # Format results
             execution_time = (time.time() - start_time) * 1000  # Convert to ms
             result = ResultFormatter.format_table(df, limit=limit)
-            
+
             # Add execution time info
             if execution_time > 1000:
                 result += f"\n(Executed in {execution_time/1000:.2f}s)"
             else:
                 result += f"\n(Executed in {execution_time:.0f}ms)"
-            
+
             return result
-            
+
         except (
             IcebergTableNotFoundError,
             IcebergInvalidQueryError,

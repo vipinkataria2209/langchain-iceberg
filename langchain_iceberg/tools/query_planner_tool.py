@@ -17,10 +17,10 @@ class QueryPlannerTool(IcebergBaseTool):
     - What filters to apply
     - Whether to use partitions
     - Estimated result size
-    
+
     Input: question (string) - The data question to answer
     Output: Query plan and suggested parameters
-    
+
     Example usage: 
     - iceberg_plan_query(question="Find high-value orders from last quarter")
     """
@@ -51,7 +51,7 @@ class QueryPlannerTool(IcebergBaseTool):
         try:
             namespaces = list(self.catalog.list_namespaces())
             tables_info = []
-            
+
             for ns in namespaces[:5]:  # Limit to first 5 namespaces
                 ns_tuple = ns if isinstance(ns, tuple) else (ns,)
                 try:
@@ -97,41 +97,41 @@ Format your response as a structured plan."""
     def _plan_without_llm(self, question: str) -> str:
         """Plan query without LLM (rule-based)."""
         question_lower = question.lower()
-        
+
         plan = {
             "question": question,
             "suggestions": [],
         }
-        
+
         # Basic keyword matching
         if "order" in question_lower:
             plan["suggestions"].append("Consider querying tables with 'order' in the name")
             plan["suggestions"].append("Common columns: order_id, customer_id, amount, order_date")
-        
+
         if "revenue" in question_lower or "sales" in question_lower:
             plan["suggestions"].append("Consider aggregating amount or price columns")
             plan["suggestions"].append("Use SUM() aggregation for revenue calculations")
-        
+
         if "date" in question_lower or "time" in question_lower or "quarter" in question_lower:
             plan["suggestions"].append("Filter by date columns to narrow results")
             plan["suggestions"].append("Consider using time-travel for historical comparisons")
-        
+
         if "top" in question_lower or "highest" in question_lower:
             plan["suggestions"].append("Use ORDER BY with LIMIT for top N queries")
-        
+
         # Format output
         output = [f"Query Plan for: {question}\n"]
         output.append("\nSuggestions:")
         for i, suggestion in enumerate(plan["suggestions"], 1):
             output.append(f"{i}. {suggestion}")
-        
+
         if not plan["suggestions"]:
             output.append("No specific suggestions. Use iceberg_get_schema to explore table structure.")
-        
+
         output.append("\nNext steps:")
         output.append("1. Use iceberg_list_tables to find relevant tables")
         output.append("2. Use iceberg_get_schema to understand table structure")
         output.append("3. Use iceberg_query to execute the query")
-        
+
         return "\n".join(output)
 

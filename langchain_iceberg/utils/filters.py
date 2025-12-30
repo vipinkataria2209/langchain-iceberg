@@ -13,23 +13,23 @@ class FilterBuilder:
     def parse_filter(filter_str: str, schema: Any) -> Any:
         """
         Parse a filter string into a PyArrow expression.
-        
+
         Supports operators: =, !=, >, >=, <, <=, IN, BETWEEN, IS NULL, IS NOT NULL
         Supports logical operators: AND, OR
-        
+
         Args:
             filter_str: Filter expression string
             schema: PyIceberg table schema
-            
+
         Returns:
             PyArrow expression
-            
+
         Raises:
             IcebergInvalidFilterError: If filter cannot be parsed
         """
         if not filter_str or not filter_str.strip():
             return None
-        
+
         # Simple filter parsing - for now, we'll use a basic approach
         # In production, this would need a more robust parser
         try:
@@ -38,7 +38,7 @@ class FilterBuilder:
             return FilterBuilder._parse_simple_filter(filter_str, schema)
         except Exception as e:
             from langchain_iceberg.exceptions import IcebergInvalidFilterError
-            
+
             raise IcebergInvalidFilterError(
                 f"Failed to parse filter '{filter_str}': {str(e)}"
             ) from e
@@ -48,16 +48,16 @@ class FilterBuilder:
         """Parse a simple filter expression."""
         # For MVP, we'll support basic equality and comparison
         # More complex parsing can be added later
-        
+
         # Pattern: column operator value
         # Examples:
         #   status = 'completed'
         #   amount > 100
         #   order_date >= '2024-01-01'
-        
+
         # Split by AND/OR (naive approach for MVP)
         parts = re.split(r'\s+(AND|OR)\s+', filter_str, flags=re.IGNORECASE)
-        
+
         if len(parts) == 1:
             # Single condition
             return FilterBuilder._parse_single_condition(parts[0], schema)
@@ -68,7 +68,7 @@ class FilterBuilder:
             for i in range(0, len(parts), 2):
                 condition = FilterBuilder._parse_single_condition(parts[i], schema)
                 conditions.append(condition)
-            
+
             # Combine with AND (simplified for MVP)
             if len(conditions) > 1:
                 result = conditions[0]
@@ -81,7 +81,7 @@ class FilterBuilder:
     def _parse_single_condition(condition: str, schema: Any) -> Any:
         """Parse a single filter condition."""
         condition = condition.strip()
-        
+
         # Pattern matching for different operators
         patterns = [
             (r'(\w+)\s*=\s*([^\s]+)', '='),
@@ -91,13 +91,13 @@ class FilterBuilder:
             (r'(\w+)\s*<\s*([^\s]+)', '<'),
             (r'(\w+)\s*<=\s*([^\s]+)', '<='),
         ]
-        
+
         for pattern, op in patterns:
             match = re.match(pattern, condition)
             if match:
                 column_name = match.group(1)
                 value_str = match.group(2).strip("'\"")
-                
+
                 # Get column from schema
                 try:
                     field = schema.find_field(column_name)
@@ -106,10 +106,10 @@ class FilterBuilder:
                     raise IcebergInvalidFilterError(
                         f"Column '{column_name}' not found in schema"
                     )
-                
+
                 # Convert value to appropriate type
                 value = FilterBuilder._convert_value(value_str, field.field_type)
-                
+
                 # Build PyArrow expression
                 if op == '=':
                     return pc.equal(pc.field(column_name), value)
@@ -123,7 +123,7 @@ class FilterBuilder:
                     return pc.less(pc.field(column_name), value)
                 elif op == '<=':
                     return pc.less_equal(pc.field(column_name), value)
-        
+
         # If no pattern matched, raise error
         from langchain_iceberg.exceptions import IcebergInvalidFilterError
         raise IcebergInvalidFilterError(
@@ -135,9 +135,9 @@ class FilterBuilder:
         """Convert string value to appropriate type based on field type."""
         # Simple type conversion for MVP
         # More robust type handling would be needed for production
-        
+
         type_name = str(field_type).lower()
-        
+
         if 'int' in type_name or 'long' in type_name:
             return int(value_str)
         elif 'float' in type_name or 'double' in type_name or 'decimal' in type_name:

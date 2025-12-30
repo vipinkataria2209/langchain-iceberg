@@ -15,7 +15,7 @@ class IcebergBaseTool(BaseTool):
         """Initialize base tool with catalog."""
         super().__init__(**kwargs)
         self._catalog = catalog
-    
+
     @property
     def catalog(self) -> Any:
         """Get the catalog instance."""

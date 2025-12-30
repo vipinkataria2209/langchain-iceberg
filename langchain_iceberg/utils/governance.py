@@ -14,7 +14,7 @@ class AccessControlValidator:
     def __init__(self, governance_config: Dict[str, Any]):
         """
         Initialize access control validator.
-        
+
         Args:
             governance_config: Governance configuration from semantic YAML
         """
@@ -24,11 +24,11 @@ class AccessControlValidator:
     def can_access_metric(self, metric_name: str, user_role: Optional[str] = None) -> bool:
         """
         Check if user can access a metric.
-        
+
         Args:
             metric_name: Name of the metric
             user_role: User's role (optional)
-            
+
         Returns:
             True if access is allowed
         """
@@ -68,11 +68,11 @@ class AccessControlValidator:
     def can_access_table(self, table_id: str, user_role: Optional[str] = None) -> bool:
         """
         Check if user can access a table.
-        
+
         Args:
             table_id: Table identifier
             user_role: User's role (optional)
-            
+
         Returns:
             True if access is allowed
         """
@@ -87,7 +87,7 @@ class PIIMasker:
     def __init__(self, governance_config: Dict[str, Any]):
         """
         Initialize PII masker.
-        
+
         Args:
             governance_config: Governance configuration from semantic YAML
         """
@@ -100,11 +100,11 @@ class PIIMasker:
     def should_mask_column(self, column_name: str, user_role: Optional[str] = None) -> bool:
         """
         Check if a column should be masked.
-        
+
         Args:
             column_name: Name of the column
             user_role: User's role (optional)
-            
+
         Returns:
             True if column should be masked
         """
@@ -120,10 +120,10 @@ class PIIMasker:
     def mask_value(self, value: Any) -> str:
         """
         Mask a PII value.
-        
+
         Args:
             value: Value to mask
-            
+
         Returns:
             Masked string
         """
@@ -143,12 +143,12 @@ class PIIMasker:
     def mask_dataframe(self, df: Any, pii_columns: List[str], user_role: Optional[str] = None) -> Any:
         """
         Mask PII columns in a DataFrame.
-        
+
         Args:
             df: Pandas DataFrame
             pii_columns: List of column names that contain PII
             user_role: User's role (optional)
-            
+
         Returns:
             DataFrame with masked PII columns
         """
@@ -173,7 +173,7 @@ class AuditLogger:
     def __init__(self, governance_config: Dict[str, Any]):
         """
         Initialize audit logger.
-        
+
         Args:
             governance_config: Governance configuration from semantic YAML
         """
@@ -215,7 +215,7 @@ class AuditLogger:
     ):
         """
         Log a query operation.
-        
+
         Args:
             operation: Operation name (e.g., "query", "get_schema", "time_travel")
             table_id: Table identifier
