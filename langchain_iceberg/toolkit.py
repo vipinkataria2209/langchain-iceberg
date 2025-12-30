@@ -16,11 +16,6 @@ from langchain_iceberg.tools.query_planner_tool import QueryPlannerTool
 from langchain_iceberg.tools.query_tools import QueryTool
 from langchain_iceberg.tools.semantic_tools import MetricToolGenerator
 from langchain_iceberg.tools.snapshot_tools import SnapshotTool, TimeTravelTool
-from langchain_iceberg.utils.governance import (
-    AccessControlValidator,
-    AuditLogger,
-    PIIMasker,
-)
 
 
 class IcebergToolkit:
@@ -106,19 +101,9 @@ class IcebergToolkit:
                     f"Failed to load semantic YAML: {str(e)}"
                 ) from e
 
-        # Initialize governance components
-        governance_config = {}
-        if self.semantic_config:
-            governance_config = self.semantic_config.get("governance", {})
-
-        self.access_control = AccessControlValidator(governance_config)
-        self.pii_masker = PIIMasker(governance_config)
-        self.audit_logger = AuditLogger(governance_config)
-
-        # Get limits from governance config
-        limits_config = governance_config.get("limits", {})
-        self.query_timeout_seconds = limits_config.get("query_timeout_seconds", 60)
-        self.max_rows_per_query = limits_config.get("max_rows_per_query", 10000)
+        # Set default query limits (can be overridden in catalog_config)
+        self.query_timeout_seconds = self.catalog_config.get("query_timeout_seconds", 60)
+        self.max_rows_per_query = self.catalog_config.get("max_rows_per_query", 10000)
 
     def _initialize_catalog(self) -> Catalog:
         """

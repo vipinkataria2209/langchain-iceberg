@@ -107,31 +107,18 @@ metrics:
 # ============================================
 # GOVERNANCE - Security & compliance
 # ============================================
-governance:
-  pii_policy:
-    mask_by_default: true
-    allowed_roles: ["admin"]
-    mask_char: "*"
-    
-  roles:
-    - name: sales
-      can_access_metrics:
-        - order_count
-      cannot_access_metrics:
-        - total_revenue
-        
-    - name: finance
-      can_access_metrics:
-        - total_revenue
-        - order_count
-        - avg_order_value
-        
-  audit:
-    enabled: true
-    log_location: ./audit.log
-    retention_days: 365
-    
-  limits:
-    max_rows_per_query: 10000
-    query_timeout_seconds: 300
+# Note: Governance features (access control, PII masking, audit logging)
+# are planned for future releases. For now, query limits can be set
+# in catalog_config when initializing IcebergToolkit:
+#
+# toolkit = IcebergToolkit(
+#     catalog_name="prod",
+#     catalog_config={
+#         "type": "rest",
+#         "uri": "http://localhost:8181",
+#         "warehouse": "s3://my-warehouse",
+#         "query_timeout_seconds": 300,
+#         "max_rows_per_query": 10000,
+#     }
+# )
 

@@ -12,7 +12,7 @@ A native LangChain integration for Apache Iceberg that enables AI-powered natura
 - 🔍 **Iceberg-Specific Tools** - Snapshots, time-travel, partition-aware queries
 - 📊 **Optional Semantic Layer** - YAML-driven metrics and dimensions
 - 💬 **Zero SQL Required** - Natural language to Iceberg queries
-- 🏢 **Enterprise-Ready** - Access control, PII protection, audit logging
+- 🏢 **Enterprise-Ready** - Query limits and timeout protection
 
 ## Installation
 
@@ -191,6 +191,6 @@ Apache 2.0 License - see [LICENSE](LICENSE) file for details.
 - [x] Query execution tools
 - [ ] Time-travel and snapshot tools
 - [ ] Semantic layer with YAML support
-- [ ] Governance features (access control, PII protection)
+- [ ] Governance features (access control, PII protection) - Planned for future release
 - [ ] Query planner tool
 

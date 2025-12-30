@@ -227,14 +227,4 @@ class SemanticLoader:
             self.load()
         return self.config.get("tables", [])
 
-    def get_governance(self) -> Dict[str, Any]:
-        """
-        Get governance configuration.
-
-        Returns:
-            Governance configuration dictionary
-        """
-        if self.config is None:
-            self.load()
-        return self.config.get("governance", {})
 
