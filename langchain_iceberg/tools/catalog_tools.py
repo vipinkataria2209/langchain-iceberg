@@ -2,7 +2,14 @@
 
 from typing import Any, Optional
 
-import pandas as pd
+try:
+    import pandas as pd
+    HAS_PANDAS = True
+except (ImportError, AttributeError):
+    # Handle NumPy 2.x compatibility issues
+    HAS_PANDAS = False
+    # Create a dummy pd for type hints
+    pd = None
 
 from langchain_iceberg.exceptions import (
     IcebergNamespaceNotFoundError,
@@ -28,7 +35,7 @@ class ListNamespacesTool(IcebergBaseTool):
     - iceberg_list_namespaces()
     """
 
-    def _run(self, **kwargs: Any) -> str:
+    def _run(self, *args: Any, **kwargs: Any) -> str:
         """Execute the tool."""
         try:
             namespaces = list(self.catalog.list_namespaces())
@@ -63,10 +70,27 @@ class ListTablesTool(IcebergBaseTool):
     - iceberg_list_tables(namespace="analytics.prod")
     """
 
-    def _run(self, namespace: str, **kwargs: Any) -> str:
+    def _run(self, namespace: Optional[str] = None, *args: Any, **kwargs: Any) -> str:
         """Execute the tool."""
         try:
-            namespace = validate_namespace(namespace)
+            # Handle case where agent passes namespace as first positional arg
+            if namespace is None and args:
+                namespace = args[0]
+            if namespace is None:
+                namespace = kwargs.get("namespace", "")
+            
+            # Handle JSON string input from agent
+            if isinstance(namespace, str) and namespace.startswith("{") and namespace.endswith("}"):
+                import json
+                try:
+                    parsed = json.loads(namespace)
+                    namespace = parsed.get("namespace", namespace)
+                except (json.JSONDecodeError, ValueError):
+                    pass
+            
+            if not namespace:
+                namespace = "test"  # Default namespace
+            namespace = validate_namespace(str(namespace))
 
             # Handle nested namespaces (convert string to tuple if needed)
             if isinstance(namespace, str) and "." in namespace:
@@ -76,13 +100,16 @@ class ListTablesTool(IcebergBaseTool):
 
             try:
                 tables = list(self.catalog.list_tables(namespace_tuple))
-                # Format table names
-                formatted_tables = [
-                    f"{'.'.join(namespace_tuple)}.{table}"
-                    if isinstance(table, str)
-                    else f"{'.'.join(namespace_tuple)}.{'.'.join(table)}"
-                    for table in tables
-                ]
+                # Format table names - extract just the table name from tuple
+                namespace_str = ".".join(namespace_tuple) if isinstance(namespace_tuple, tuple) else str(namespace_tuple)
+                formatted_tables = []
+                for table in tables:
+                    if isinstance(table, tuple):
+                        # Table tuple may include namespace, extract just the table name (last element)
+                        table_name = table[-1] if len(table) > 0 else str(table)
+                        formatted_tables.append(f"{namespace_str}.{table_name}")
+                    else:
+                        formatted_tables.append(f"{namespace_str}.{str(table)}")
                 return ResultFormatter.format_list(
                     formatted_tables, title=f"Tables in namespace '{namespace}'"
                 )
@@ -159,7 +186,10 @@ class GetSchemaTool(IcebergBaseTool):
                 scan = table.scan(limit=3)
                 arrow_table = scan.to_arrow()
                 if arrow_table and len(arrow_table) > 0:
-                    sample_data = arrow_table.to_pandas()
+                    if HAS_PANDAS:
+                        sample_data = arrow_table.to_pandas()
+                    else:
+                        sample_data = arrow_table  # Use PyArrow table directly
             except Exception:
                 # If sample data fails, continue without it
                 pass

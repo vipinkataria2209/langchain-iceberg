@@ -1,0 +1,231 @@
+# EPA Air Quality Semantic Layer Configuration
+# Based on EPA AirData daily summary files
+# Documentation: https://aqs.epa.gov/aqsweb/airdata/FileFormats.html
+
+version: 1.0
+catalog: rest
+warehouse: s3://warehouse/wh/
+
+# ============================================
+# TABLES - Physical table definitions
+# ============================================
+tables:
+  - name: daily_summary
+    namespace: epa
+    description: "EPA Air Quality daily summary data with measurements for various pollutants"
+    
+    columns:
+      - name: state_code
+        type: string
+        description: "FIPS state code"
+        partition: false
+        pii: false
+        
+      - name: county_code
+        type: string
+        description: "FIPS county code"
+        pii: false
+        
+      - name: site_num
+        type: string
+        description: "Site number within county"
+        pii: false
+        
+      - name: parameter_code
+        type: string
+        description: "EPA parameter code (e.g., 88101 for PM2.5, 44201 for Ozone)"
+        pii: false
+        
+      - name: poc
+        type: int
+        description: "Parameter Occurrence Code"
+        pii: false
+        
+      - name: latitude
+        type: double
+        description: "Monitoring site latitude"
+        
+      - name: longitude
+        type: double
+        description: "Monitoring site longitude"
+        
+      - name: parameter_name
+        type: string
+        description: "Name of the pollutant/parameter"
+        
+      - name: date_local
+        type: timestamp
+        description: "Date of measurement in local time"
+        partition: true
+        
+      - name: arithmetic_mean
+        type: double
+        description: "Daily arithmetic mean concentration"
+        
+      - name: first_max_value
+        type: double
+        description: "First maximum value for the day"
+        
+      - name: aqi
+        type: int
+        description: "Air Quality Index value"
+        
+      - name: state_name
+        type: string
+        description: "State name"
+        
+      - name: county_name
+        type: string
+        description: "County name"
+        
+      - name: units_of_measure
+        type: string
+        description: "Units of measurement (e.g., 'Micrograms/cubic meter (LC)')"
+
+# ============================================
+# DIMENSIONS - How to slice/filter data
+# ============================================
+dimensions:
+  - name: state
+    description: "State where monitoring site is located"
+    table: daily_summary
+    column: state_name
+    type: categorical
+    
+  - name: county
+    description: "County where monitoring site is located"
+    table: daily_summary
+    column: county_name
+    type: categorical
+    
+  - name: pollutant
+    description: "Pollutant type (PM2.5, Ozone, etc.)"
+    table: daily_summary
+    column: parameter_name
+    type: categorical
+    values:
+      "PM2.5 - Local Conditions": "PM2.5"
+      "Ozone": "Ozone"
+      "PM10 Total 0-10um STP": "PM10"
+      "Carbon monoxide": "CO"
+      "Nitrogen dioxide (NO2)": "NO2"
+      "Sulfur dioxide": "SO2"
+      
+  - name: measurement_date
+    description: "Date of air quality measurement"
+    table: daily_summary
+    column: date_local
+    type: datetime
+    granularities:
+      - day
+      - week
+      - month
+      - quarter
+      - year
+    time_travel: true
+
+# ============================================
+# METRICS - Business calculations
+# ============================================
+metrics:
+  - name: avg_pm25_concentration
+    description: "Average PM2.5 concentration in micrograms per cubic meter"
+    type: avg
+    expression:
+      table: daily_summary
+      aggregation: avg
+      column: arithmetic_mean
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "88101"  # PM2.5 parameter code
+    unit: "μg/m³"
+    format: "{:.2f}"
+    
+  - name: max_pm25_concentration
+    description: "Maximum PM2.5 concentration"
+    type: max
+    expression:
+      table: daily_summary
+      aggregation: max
+      column: first_max_value
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "88101"
+    unit: "μg/m³"
+    format: "{:.2f}"
+    
+  - name: avg_ozone_concentration
+    description: "Average Ozone concentration"
+    type: avg
+    expression:
+      table: daily_summary
+      aggregation: avg
+      column: arithmetic_mean
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "44201"  # Ozone parameter code
+    unit: "ppm"
+    format: "{:.3f}"
+    
+  - name: max_ozone_concentration
+    description: "Maximum Ozone concentration"
+    type: max
+    expression:
+      table: daily_summary
+      aggregation: max
+      column: first_max_value
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "44201"
+    unit: "ppm"
+    format: "{:.3f}"
+    
+  - name: avg_aqi
+    description: "Average Air Quality Index"
+    type: avg
+    expression:
+      table: daily_summary
+      aggregation: avg
+      column: aqi
+      filters:
+        - column: aqi
+          operator: "!="
+          value: null
+    format: "{:.1f}"
+    
+  - name: measurement_count
+    description: "Total number of air quality measurements"
+    type: count
+    expression:
+      table: daily_summary
+      aggregation: count
+      column: date_local
+      
+  - name: unhealthy_days_count
+    description: "Number of days with AQI > 100 (unhealthy for sensitive groups)"
+    type: count
+    expression:
+      table: daily_summary
+      aggregation: count
+      column: aqi
+      filters:
+        - column: aqi
+          operator: ">"
+          value: 100
+          
+  - name: pm25_measurement_count
+    description: "Number of PM2.5 measurements"
+    type: count
+    expression:
+      table: daily_summary
+      aggregation: count
+      column: arithmetic_mean
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "88101"
+

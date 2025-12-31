@@ -1,8 +1,14 @@
 """Auto-generated semantic tools from YAML metrics."""
 
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
-import pandas as pd
+try:
+    import pandas as pd
+    HAS_PANDAS = True
+except (ImportError, AttributeError):
+    # Handle NumPy 2.x compatibility issues
+    HAS_PANDAS = False
+    pd = None
 
 from langchain_iceberg.exceptions import IcebergInvalidQueryError, IcebergTableNotFoundError
 from langchain_iceberg.tools.base import IcebergBaseTool
@@ -121,9 +127,16 @@ class MetricTool(IcebergBaseTool):
         arrow_table = scan.to_arrow()
 
         if arrow_table and len(arrow_table) > 0:
-            df = arrow_table.to_pandas()
+            if HAS_PANDAS:
+                df = arrow_table.to_pandas()
+            else:
+                df = arrow_table  # Use PyArrow table directly
         else:
-            df = pd.DataFrame()
+            if HAS_PANDAS:
+                df = pd.DataFrame()
+            else:
+                import pyarrow as pa
+                df = pa.Table.from_arrays([], names=[])
 
         # Calculate aggregation
         aggregation = expr["aggregation"]
@@ -251,8 +264,32 @@ class MetricToolGenerator:
     """Generates metric tools from semantic YAML configuration."""
 
     @staticmethod
+    def _requires_join(metric_config: dict, semantic_config: dict) -> bool:
+        """Check if metric requires joins based on relationships or explicit flag."""
+        # Check explicit flag
+        if metric_config.get("requires_join", False):
+            return True
+        
+        # Check if metric references multiple tables via relationships
+        expr = metric_config.get("expression", {})
+        table_name = expr.get("table", "")
+        
+        # Check if any relationships involve this table
+        relationships = semantic_config.get("relationships", [])
+        for rel in relationships:
+            if rel.get("from_table", "").endswith(table_name) or rel.get("to_table", "").endswith(table_name):
+                # If metric uses columns from related tables, it needs a join
+                # For now, we'll rely on explicit requires_join flag
+                pass
+        
+        return False
+
+    @staticmethod
     def generate_tools(
-        catalog: Any, semantic_config: dict
+        catalog: Any, 
+        semantic_config: dict,
+        enable_sql: bool = False,
+        catalog_config: Optional[dict] = None,
     ) -> List[MetricTool]:
         """
         Generate metric tools from semantic configuration.
@@ -260,6 +297,8 @@ class MetricToolGenerator:
         Args:
             catalog: PyIceberg catalog instance
             semantic_config: Parsed semantic YAML configuration
+            enable_sql: Whether to use DuckDB for metrics requiring joins
+            catalog_config: Catalog configuration (needed for DuckDB)
 
         Returns:
             List of MetricTool instances
@@ -268,6 +307,26 @@ class MetricToolGenerator:
         metrics = semantic_config.get("metrics", [])
 
         for metric_config in metrics:
+            # Check if metric requires joins
+            requires_join = MetricToolGenerator._requires_join(metric_config, semantic_config)
+            
+            if requires_join and enable_sql:
+                # Use DuckDB-based metric tool (if available)
+                try:
+                    from langchain_iceberg.tools.duckdb_metric_tool import DuckDBMetricTool
+                    tool = DuckDBMetricTool(
+                        catalog=catalog,
+                        catalog_config=catalog_config or {},
+                        metric_config=metric_config,
+                        semantic_config=semantic_config,
+                    )
+                    tools.append(tool)
+                    continue
+                except (ImportError, AttributeError):
+                    # DuckDB not available or tool not implemented - fall back to regular tool
+                    pass
+            
+            # Use standard PyIceberg-based tool
             tool = MetricTool(
                 catalog=catalog,
                 metric_config=metric_config,

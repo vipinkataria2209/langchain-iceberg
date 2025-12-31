@@ -46,6 +46,7 @@ class IcebergToolkit:
         llm: Optional[Any] = None,
         enable_time_travel: bool = True,
         enable_snapshots: bool = True,
+        enable_sql_queries: bool = False,
     ) -> None:
         """
         Initialize the Iceberg toolkit.
@@ -62,6 +63,7 @@ class IcebergToolkit:
             llm: Optional LLM instance for query planning (not yet implemented)
             enable_time_travel: Enable time-travel tools (default: True)
             enable_snapshots: Enable snapshot tools (default: True)
+            enable_sql_queries: Enable DuckDB SQL query tool for JOINs (default: False)
 
         Raises:
             IcebergConnectionError: If catalog connection fails
@@ -72,6 +74,7 @@ class IcebergToolkit:
         self.llm = llm
         self.enable_time_travel = enable_time_travel
         self.enable_snapshots = enable_snapshots
+        self.enable_sql_queries = enable_sql_queries
 
         # Initialize catalog connection
         try:
@@ -207,6 +210,22 @@ class IcebergToolkit:
             )
         )
 
+        # DuckDB SQL query tool (if enabled)
+        if self.enable_sql_queries:
+            try:
+                from langchain_iceberg.tools.duckdb_tool import DuckDBQueryTool
+                tools.append(
+                    DuckDBQueryTool(
+                        catalog=self.catalog,
+                        catalog_config=self.catalog_config,
+                        query_timeout_seconds=self.query_timeout_seconds,
+                        max_rows_per_query=self.max_rows_per_query,
+                    )
+                )
+            except ImportError:
+                # DuckDB not installed - skip this tool
+                pass
+
         # Query planner tool (if LLM provided)
         if self.llm:
             tools.append(QueryPlannerTool(catalog=self.catalog, llm=self.llm))
@@ -222,6 +241,8 @@ class IcebergToolkit:
             semantic_tools = MetricToolGenerator.generate_tools(
                 catalog=self.catalog,
                 semantic_config=self.semantic_config,
+                enable_sql=self.enable_sql_queries,
+                catalog_config=self.catalog_config,
             )
             tools.extend(semantic_tools)
 

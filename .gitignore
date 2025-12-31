@@ -141,6 +141,9 @@ audit.log
 test_*.py
 spark-warehouse/
 
+# Data files (too large for git)
+data/
+
 # Docker
 .dockerignore
 

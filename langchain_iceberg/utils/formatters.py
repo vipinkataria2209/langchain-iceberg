@@ -2,7 +2,13 @@
 
 from typing import Any, Optional
 
-import pandas as pd
+try:
+    import pandas as pd
+    HAS_PANDAS = True
+except (ImportError, AttributeError):
+    # Handle NumPy 2.x compatibility issues
+    HAS_PANDAS = False
+    pd = None
 
 
 class ResultFormatter:
@@ -10,7 +16,7 @@ class ResultFormatter:
 
     @staticmethod
     def format_table(
-        df: pd.DataFrame,
+        df: Any,  # pd.DataFrame or pyarrow.Table
         limit: Optional[int] = None,
         max_rows_display: int = 100,
     ) -> str:
@@ -18,13 +24,33 @@ class ResultFormatter:
         Format a DataFrame as a readable table string.
 
         Args:
-            df: DataFrame to format
+            df: DataFrame or PyArrow Table to format
             limit: Optional limit that was applied
             max_rows_display: Maximum rows to display in output
 
         Returns:
             Formatted string representation
         """
+        # Handle PyArrow Table if pandas not available
+        if not HAS_PANDAS:
+            import pyarrow as pa
+            if isinstance(df, pa.Table):
+                if len(df) == 0:
+                    return "No results found."
+                # Convert to string representation
+                display_table = df.slice(0, min(max_rows_display, len(df)))
+                output = [f"Query Results ({len(df)} rows):\n"]
+                output.append(display_table.to_string())
+                if len(df) > max_rows_display:
+                    output.append(
+                        f"\n(Showing first {max_rows_display} rows. "
+                        f"Use limit parameter to see more.)"
+                    )
+                return "\n".join(output)
+            else:
+                return "No results found."
+        
+        # Original pandas-based formatting
         if df.empty:
             return "No results found."
 
@@ -81,10 +107,17 @@ class ResultFormatter:
             for part in partitions:
                 output.append(f"  - {part}")
 
-        if sample_data is not None and not sample_data.empty:
-            output.append("\nSample Rows (3):")
-            sample_str = sample_data.head(3).to_string(index=False)
-            output.append(sample_str)
+        if sample_data is not None:
+            if HAS_PANDAS and not sample_data.empty:
+                output.append("\nSample Rows (3):")
+                sample_str = sample_data.head(3).to_string(index=False)
+                output.append(sample_str)
+            elif not HAS_PANDAS:
+                import pyarrow as pa
+                if isinstance(sample_data, pa.Table) and len(sample_data) > 0:
+                    output.append("\nSample Rows (3):")
+                    sample_str = sample_data.slice(0, min(3, len(sample_data))).to_string()
+                    output.append(sample_str)
 
         return "\n".join(output)
 

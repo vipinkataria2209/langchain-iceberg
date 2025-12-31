@@ -3,7 +3,13 @@
 import time
 from typing import Any, List, Optional
 
-import pandas as pd
+try:
+    import pandas as pd
+    HAS_PANDAS = True
+except (ImportError, AttributeError):
+    # Handle NumPy 2.x compatibility issues
+    HAS_PANDAS = False
+    pd = None
 
 from langchain_iceberg.exceptions import (
     IcebergInvalidFilterError,
@@ -56,16 +62,46 @@ class QueryTool(IcebergBaseTool):
 
     def _run(
         self,
-        table_id: str,
+        table_id: Optional[str] = None,
         columns: Optional[List[str]] = None,
         filters: Optional[str] = None,
         limit: int = 100,
+        *args: Any,
         **kwargs: Any,
     ) -> str:
         """Execute the tool."""
         start_time = time.time()
 
         try:
+            # Handle case where agent passes table_id as first positional arg
+            if table_id is None and args:
+                table_id = args[0]
+            if table_id is None:
+                table_id = kwargs.get("table_id", "")
+            
+            # Handle JSON string input from agent
+            if isinstance(table_id, str) and table_id.startswith("{") and table_id.endswith("}"):
+                import json
+                try:
+                    parsed = json.loads(table_id)
+                    table_id = parsed.get("table_id", table_id)
+                    if columns is None:
+                        columns = parsed.get("columns")
+                    if filters is None:
+                        filters = parsed.get("filters")
+                    if limit == 100:
+                        limit = parsed.get("limit", 100)
+                except:
+                    pass
+            
+            # Also get other params from kwargs if not provided
+            if columns is None:
+                columns = kwargs.get("columns")
+            if filters is None:
+                filters = kwargs.get("filters")
+            if limit == 100:
+                limit = kwargs.get("limit", 100)
+            
             namespace, table_name = validate_table_id(table_id)
             filters = validate_filter_expression(filters)
 
@@ -133,12 +169,24 @@ class QueryTool(IcebergBaseTool):
 
             # Convert to pandas
             if arrow_table and len(arrow_table) > 0:
-                df = arrow_table.to_pandas()
-                # Apply limit after fetching (PyIceberg doesn't support limit in scan builder)
-                if limit is not None and limit > 0 and len(df) > limit:
-                    df = df.head(limit)
+                if HAS_PANDAS:
+                    df = arrow_table.to_pandas()
+                    # Apply limit after fetching (PyIceberg doesn't support limit in scan builder)
+                    if limit is not None and limit > 0 and len(df) > limit:
+                        df = df.head(limit)
+                else:
+                    # Fallback: use PyArrow directly
+                    import pyarrow as pa
+                    if limit is not None and limit > 0:
+                        df = arrow_table.slice(0, limit).to_pandas() if HAS_PANDAS else arrow_table.slice(0, limit)
+                    else:
+                        df = arrow_table
             else:
-                df = pd.DataFrame()
+                if HAS_PANDAS:
+                    df = pd.DataFrame()
+                else:
+                    import pyarrow as pa
+                    df = pa.Table.from_arrays([], names=[])
 
             # Format results
             execution_time = (time.time() - start_time) * 1000  # Convert to ms

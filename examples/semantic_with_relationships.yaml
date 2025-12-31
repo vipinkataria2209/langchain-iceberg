@@ -1,0 +1,75 @@
+version: "1.0"
+catalog: "sql"
+warehouse: "file://warehouse_sql"
+
+tables:
+  - name: orders
+    namespace: test
+    description: "Customer orders"
+    
+  - name: customers
+    namespace: test
+    description: "Customer information"
+
+# Define relationships between tables
+relationships:
+  - name: order_to_customer
+    type: many_to_one
+    from_table: test.orders
+    from_column: customer_id
+    to_table: test.customers
+    to_column: customer_id
+    description: "Link orders to customer details"
+
+metrics:
+  - name: total_revenue
+    description: "Total revenue across all orders"
+    type: sum
+    expression:
+      table: orders
+      aggregation: sum
+      column: amount
+    requires_join: false  # Single table metric
+    
+  - name: revenue_by_customer
+    description: "Total revenue grouped by customer"
+    type: sum
+    expression:
+      table: orders
+      aggregation: sum
+      column: amount
+    group_by: customer_id
+    requires_join: false  # Single table with group by
+    
+  - name: customer_order_summary
+    description: "Customer names with their order counts and total revenue"
+    type: calculated
+    formula: |
+      SELECT 
+        c.customer_name,
+        COUNT(o.order_id) as order_count,
+        SUM(o.amount) as total_revenue
+      FROM test.orders o
+      JOIN test.customers c ON o.customer_id = c.customer_id
+      GROUP BY c.customer_name
+    requires_join: true  # Requires JOIN - will use DuckDB
+
+dimensions:
+  - name: customer_segment
+    description: "Customer segment (new, returning, vip)"
+    type: categorical
+    table: customers
+    column: customer_segment
+    
+  - name: order_date
+    description: "Date when order was placed"
+    type: datetime
+    table: orders
+    column: order_date
+    
+  - name: order_status
+    description: "Order status (completed, pending, cancelled)"
+    type: categorical
+    table: orders
+    column: status
+

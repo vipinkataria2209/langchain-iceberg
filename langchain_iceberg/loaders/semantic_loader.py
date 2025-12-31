@@ -192,6 +192,49 @@ class SemanticLoader:
                             f"Valid types: {valid_types}"
                         )
 
+        # Validate relationships (NEW)
+        if "relationships" in config:
+            if not isinstance(config["relationships"], list):
+                raise SemanticYAMLError("'relationships' must be a list")
+            
+            relationship_names = []
+            for i, relationship in enumerate(config["relationships"]):
+                if not isinstance(relationship, dict):
+                    raise SemanticYAMLError(f"Relationship at index {i} must be a dictionary")
+                if "name" not in relationship:
+                    raise SemanticYAMLError(f"Relationship at index {i} missing 'name' field")
+                if "type" not in relationship:
+                    raise SemanticYAMLError(f"Relationship at index {i} missing 'type' field")
+                if "from_table" not in relationship:
+                    raise SemanticYAMLError(f"Relationship at index {i} missing 'from_table' field")
+                if "to_table" not in relationship:
+                    raise SemanticYAMLError(f"Relationship at index {i} missing 'to_table' field")
+                
+                relationship_name = relationship["name"]
+                if relationship_name in relationship_names:
+                    raise SemanticYAMLError(f"Duplicate relationship name: {relationship_name}")
+                relationship_names.append(relationship_name)
+                
+                # Validate relationship type
+                valid_types = ["one_to_one", "many_to_one", "one_to_many", "many_to_many"]
+                if relationship["type"] not in valid_types:
+                    raise SemanticYAMLError(
+                        f"Invalid relationship type '{relationship['type']}' for relationship '{relationship_name}'. "
+                        f"Valid types: {valid_types}"
+                    )
+                
+                # Validate join columns
+                if relationship["type"] == "many_to_many":
+                    if "through_table" not in relationship:
+                        raise SemanticYAMLError(
+                            f"Relationship '{relationship_name}' of type 'many_to_many' must have 'through_table'"
+                        )
+                else:
+                    if "from_column" not in relationship:
+                        raise SemanticYAMLError(f"Relationship '{relationship_name}' missing 'from_column' field")
+                    if "to_column" not in relationship:
+                        raise SemanticYAMLError(f"Relationship '{relationship_name}' missing 'to_column' field")
+
         return True
 
     def get_metrics(self) -> List[Dict[str, Any]]:
@@ -226,5 +269,16 @@ class SemanticLoader:
         if self.config is None:
             self.load()
         return self.config.get("tables", [])
+
+    def get_relationships(self) -> List[Dict[str, Any]]:
+        """
+        Get all relationship definitions.
+
+        Returns:
+            List of relationship dictionaries
+        """
+        if self.config is None:
+            self.load()
+        return self.config.get("relationships", [])
 
 

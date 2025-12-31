@@ -2,7 +2,13 @@
 
 from typing import Any, List, Optional
 
-import pandas as pd
+try:
+    import pandas as pd
+    HAS_PANDAS = True
+except (ImportError, AttributeError):
+    # Handle NumPy 2.x compatibility issues
+    HAS_PANDAS = False
+    pd = None
 
 from langchain_iceberg.exceptions import (
     IcebergInvalidFilterError,
@@ -254,12 +260,23 @@ class TimeTravelTool(IcebergBaseTool):
 
             # Convert to pandas
             if arrow_table and len(arrow_table) > 0:
-                df = arrow_table.to_pandas()
-                # Apply limit after fetching (PyIceberg doesn't support limit in scan builder)
-                if limit is not None and limit > 0 and len(df) > limit:
-                    df = df.head(limit)
+                if HAS_PANDAS:
+                    df = arrow_table.to_pandas()
+                    # Apply limit after fetching (PyIceberg doesn't support limit in scan builder)
+                    if limit is not None and limit > 0 and len(df) > limit:
+                        df = df.head(limit)
+                else:
+                    # Fallback: use PyArrow directly
+                    if limit is not None and limit > 0:
+                        df = arrow_table.slice(0, limit)
+                    else:
+                        df = arrow_table
             else:
-                df = pd.DataFrame()
+                if HAS_PANDAS:
+                    df = pd.DataFrame()
+                else:
+                    import pyarrow as pa
+                    df = pa.Table.from_arrays([], names=[])
 
             # Format results with time-travel context
             time_context = ""
