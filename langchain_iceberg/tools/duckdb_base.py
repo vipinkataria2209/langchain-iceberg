@@ -1,9 +1,9 @@
-"""DuckDB-based SQL query tool for multi-table operations."""
+"""Shared DuckDB execution base class for SQL tools."""
 
 import re
-import time
 import warnings
-from typing import Any
+from typing import Any, Optional, Tuple
+
 from pydantic import PrivateAttr
 
 try:
@@ -12,13 +12,6 @@ try:
 except ImportError:
     HAS_DUCKDB = False
     duckdb = None
-
-try:
-    import pandas as pd
-    HAS_PANDAS = True
-except (ImportError, AttributeError):
-    HAS_PANDAS = False
-    pd = None
 
 try:
     import sqlparse
@@ -35,49 +28,21 @@ from langchain_iceberg.tools.base import IcebergBaseTool
 from langchain_iceberg.utils.formatters import ResultFormatter
 
 
-class DuckDBQueryTool(IcebergBaseTool):
-    """Execute SQL queries with JOINs using DuckDB + Iceberg extension."""
-
-    name: str = "iceberg_sql_query"
-    description: str = """
-    Execute SQL queries with JOINs across multiple Iceberg tables using DuckDB.
+class DuckDBExecutorBase(IcebergBaseTool):
+    """Base class for DuckDB-based SQL execution tools.
     
-    Use this when you need to:
-    - Join 2+ tables
-    - Complex aggregations across tables
-    - Window functions or CTEs
-    - Subqueries
+    Provides shared functionality for:
+    - DuckDB connection management
+    - Iceberg table registration
+    - SQL parsing and execution
+    - Cloud storage configuration
     
-    Input: 
-        sql_query (string): Standard SQL query
-        
-    Important: 
-    - Tables are referenced as namespace.table_name
-    - DuckDB reads directly from Iceberg files (no data copying)
-    - Predicates are pushed down to file level for performance
-    
-    Example:
-    ```
-    iceberg_sql_query(
-        sql_query=\"\"\"
-            SELECT 
-                c.segment,
-                COUNT(o.order_id) as order_count,
-                SUM(o.amount) as total_revenue
-            FROM sales.orders o
-            JOIN sales.customers c ON o.customer_id = c.customer_id
-            WHERE o.status = 'completed'
-            GROUP BY c.segment
-            ORDER BY total_revenue DESC
-        \"\"\"
-    )
-    ```
+    Subclasses should implement:
+    - _run() - Tool execution logic
     """
-    
+
     _duckdb_conn: Any = PrivateAttr()
     _catalog_config: dict = PrivateAttr()
-    _query_timeout_seconds: int = PrivateAttr()
-    _max_rows_per_query: int = PrivateAttr()
     _has_iceberg_extension: bool = PrivateAttr()
     _registered_tables: set[str] = PrivateAttr(default_factory=set)
 
@@ -85,29 +50,35 @@ class DuckDBQueryTool(IcebergBaseTool):
         self,
         catalog: Any,
         catalog_config: dict,
-        query_timeout_seconds: int = 60,
-        max_rows_per_query: int = 10000,
         **kwargs: Any,
     ):
-        """Initialize DuckDB query tool."""
+        """Initialize DuckDB executor base.
+        
+        Args:
+            catalog: PyIceberg catalog instance
+            catalog_config: Catalog configuration dict
+            **kwargs: Additional arguments for IcebergBaseTool
+        """
         super().__init__(catalog=catalog, **kwargs)
         
         if not HAS_DUCKDB:
             raise ImportError(
-                "DuckDB is required for SQL queries. "
+                "DuckDB is required for SQL execution. "
                 "Install with: pip install duckdb>=0.10.0"
             )
         
-        object.__setattr__(self, "_query_timeout_seconds", query_timeout_seconds)
-        object.__setattr__(self, "_max_rows_per_query", max_rows_per_query)
         object.__setattr__(self, "_catalog_config", catalog_config)
         object.__setattr__(self, "_registered_tables", set())
         
         # Initialize DuckDB connection
         object.__setattr__(self, "_duckdb_conn", self._init_duckdb())
 
-    def _init_duckdb(self):
-        """Initialize DuckDB connection with Iceberg extension."""
+    def _init_duckdb(self) -> Any:
+        """Initialize DuckDB connection with Iceberg extension.
+        
+        Returns:
+            DuckDB connection object
+        """
         conn = duckdb.connect()
         
         # Try to install Iceberg extension
@@ -132,8 +103,12 @@ class DuckDBQueryTool(IcebergBaseTool):
         
         return conn
 
-    def _configure_cloud_storage(self, conn):
-        """Configure S3/Azure/GCS secrets for DuckDB."""
+    def _configure_cloud_storage(self, conn: Any) -> None:
+        """Configure S3/Azure/GCS secrets for DuckDB.
+        
+        Args:
+            conn: DuckDB connection
+        """
         # S3 configuration
         if "s3.access-key-id" in self._catalog_config:
             try:
@@ -155,11 +130,17 @@ class DuckDBQueryTool(IcebergBaseTool):
             except Exception as e:
                 warnings.warn(f"Failed to configure S3 for DuckDB: {e}")
 
-    def _get_table_location(self, table_id: str) -> tuple[str, str]:
+    def _get_table_location(self, table_id: str) -> Tuple[str, Optional[str]]:
         """Get physical storage location of Iceberg table.
         
+        Args:
+            table_id: Fully qualified table name (namespace.table)
+            
         Returns:
-            tuple: (table_root_directory, metadata_file_path)
+            Tuple of (table_root_directory, metadata_file_path)
+            
+        Raises:
+            IcebergConnectionError: If table cannot be loaded or location cannot be determined
         """
         namespace_parts = table_id.split(".")
         if len(namespace_parts) < 2:
@@ -208,8 +189,18 @@ class DuckDBQueryTool(IcebergBaseTool):
         
         return (table_root, metadata_file)
 
-    def _register_table(self, table_id: str):
-        """Register Iceberg table in DuckDB (zero-copy view)."""
+    def _register_table(self, table_id: str) -> str:
+        """Register Iceberg table in DuckDB (zero-copy view).
+        
+        Args:
+            table_id: Fully qualified table name (namespace.table)
+            
+        Returns:
+            View name registered in DuckDB
+            
+        Raises:
+            IcebergConnectionError: If table registration fails
+        """
         # Skip if already registered
         if table_id in self._registered_tables:
             return table_id.replace(".", "_")
@@ -245,8 +236,17 @@ class DuckDBQueryTool(IcebergBaseTool):
                 f"Failed to register table '{table_id}' in DuckDB: {str(e)}"
             ) from e
 
-    def _extract_table_references(self, sql_query: str) -> list:
-        """Extract table references from SQL query."""
+    def _extract_table_references(self, sql_query: str) -> list[str]:
+        """Extract table references from SQL query.
+        
+        Uses sqlparse library with regex fallback for reliability.
+        
+        Args:
+            sql_query: SQL query string
+            
+        Returns:
+            List of fully qualified table names (namespace.table)
+        """
         if HAS_SQLPARSE:
             try:
                 tables = set()
@@ -314,89 +314,95 @@ class DuckDBQueryTool(IcebergBaseTool):
         
         return list(tables)
 
-    def _run(self, sql_query: str = "", **kwargs: Any) -> str:
-        """Execute SQL query."""
-        start_time = time.time()
+    def _execute_sql_query(
+        self, 
+        sql_query: str,
+        apply_limit: bool = False,
+        max_rows: Optional[int] = None
+    ) -> Any:
+        """Execute SQL query with automatic table registration.
         
-        try:
-            # Handle various input formats
-            if not sql_query:
-                sql_query = kwargs.get("sql_query", "")
+        Args:
+            sql_query: SQL query to execute
+            apply_limit: Whether to apply LIMIT if not present
+            max_rows: Maximum rows to return (if apply_limit=True)
             
-            if isinstance(sql_query, str) and sql_query.startswith("{"):
-                import json
-                try:
-                    parsed = json.loads(sql_query)
-                    sql_query = parsed.get("sql_query", sql_query)
-                except (json.JSONDecodeError, ValueError):
-                    pass
+        Returns:
+            Pandas DataFrame with query results
             
-            if not sql_query or not isinstance(sql_query, str):
-                raise IcebergInvalidQueryError(
-                    "sql_query parameter is required and must be a string"
-                )
-            
-            # Extract and register tables
-            table_refs = self._extract_table_references(sql_query)
-            
-            if not table_refs:
-                raise IcebergInvalidQueryError(
-                    "No table references found in query. "
-                    "Tables must be qualified as 'namespace.table_name'"
-                )
-            
-            # Register each table and build replacement map
-            replacements = {}
-            for table_id in table_refs:
-                view_name = self._register_table(table_id)
-                replacements[table_id] = view_name
-            
-            # Replace table names in SQL
-            modified_sql = sql_query
-            for table_id, view_name in replacements.items():
-                # Use word boundaries to avoid partial replacements
-                modified_sql = re.sub(
-                    r'\b' + re.escape(table_id) + r'\b',
-                    view_name,
-                    modified_sql,
-                    flags=re.IGNORECASE
-                )
-            
-            # Add LIMIT if not present (for safety)
+        Raises:
+            IcebergInvalidQueryError: If query is invalid
+            IcebergConnectionError: If execution fails
+        """
+        # Extract and register tables
+        table_refs = self._extract_table_references(sql_query)
+        
+        if not table_refs:
+            raise IcebergInvalidQueryError(
+                "No table references found in query. "
+                "Tables must be qualified as 'namespace.table_name'"
+            )
+        
+        # Register each table and build replacement map
+        replacements = {}
+        for table_id in table_refs:
+            view_name = self._register_table(table_id)
+            replacements[table_id] = view_name
+        
+        # Replace table names in SQL
+        modified_sql = sql_query
+        for table_id, view_name in replacements.items():
+            # Use word boundaries to avoid partial replacements
+            modified_sql = re.sub(
+                r'\b' + re.escape(table_id) + r'\b',
+                view_name,
+                modified_sql,
+                flags=re.IGNORECASE
+            )
+        
+        # Add LIMIT if requested and not present
+        if apply_limit and max_rows:
             sql_upper = modified_sql.upper()
             if "LIMIT" not in sql_upper and "GROUP BY" not in sql_upper:
-                modified_sql = f"{modified_sql.rstrip(';')} LIMIT {self._max_rows_per_query}"
-            
-            # Execute query
+                modified_sql = f"{modified_sql.rstrip(';')} LIMIT {max_rows}"
+        
+        # Execute query
+        try:
             result_df = self._duckdb_conn.execute(modified_sql).fetchdf()
-            
-            # Check timeout
-            elapsed = time.time() - start_time
-            if elapsed > self._query_timeout_seconds:
-                raise IcebergInvalidQueryError(
-                    f"Query timeout exceeded ({self._query_timeout_seconds}s)"
-                )
-            
-            # Apply row limit if needed
-            if len(result_df) > self._max_rows_per_query:
-                result_df = result_df.head(self._max_rows_per_query)
-                was_truncated = True
-            else:
-                was_truncated = False
-            
-            # Format results
-            execution_time = elapsed * 1000
-            formatted = ResultFormatter.format_table(result_df, limit=self._max_rows_per_query)
-            
-            if was_truncated:
-                formatted += f"\n(Results truncated to {self._max_rows_per_query} rows)"
-            formatted += f"\n(Executed in {execution_time:.0f}ms via DuckDB)"
-            
-            return formatted
-
-        except (IcebergInvalidQueryError, IcebergConnectionError):
-            raise
+            return result_df
         except Exception as e:
             raise IcebergConnectionError(
                 f"SQL query execution failed: {str(e)}"
             ) from e
+
+    def _format_results(
+        self, 
+        result_df: Any, 
+        limit: Optional[int] = None,
+        include_metadata: bool = True,
+        execution_time_ms: Optional[float] = None,
+        was_truncated: bool = False
+    ) -> str:
+        """Format query results for display.
+        
+        Args:
+            result_df: Pandas DataFrame with results
+            limit: Maximum rows to display
+            include_metadata: Whether to include execution metadata
+            execution_time_ms: Query execution time in milliseconds
+            was_truncated: Whether results were truncated
+            
+        Returns:
+            Formatted string representation of results
+        """
+        # Format table
+        formatted = ResultFormatter.format_table(result_df, limit=limit or 10000)
+        
+        # Add metadata if requested
+        if include_metadata:
+            if was_truncated and limit:
+                formatted += f"\n(Results truncated to {limit} rows)"
+            if execution_time_ms is not None:
+                formatted += f"\n(Executed in {execution_time_ms:.0f}ms via DuckDB)"
+        
+        return formatted

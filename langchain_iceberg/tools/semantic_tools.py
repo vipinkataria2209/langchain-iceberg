@@ -307,13 +307,19 @@ class MetricToolGenerator:
         metrics = semantic_config.get("metrics", [])
 
         for metric_config in metrics:
-            # Check if metric requires joins
+            # Check if metric requires joins or has SQL formula
             requires_join = MetricToolGenerator._requires_join(metric_config, semantic_config)
+            has_formula = "formula" in metric_config
             
-            if requires_join and enable_sql:
-                # Use DuckDB-based metric tool (if available)
+            # Use DuckDB tool for SQL formula metrics or metrics requiring joins
+            if (requires_join or has_formula) and enable_sql:
                 try:
-                    from langchain_iceberg.tools.duckdb_metric_tool import DuckDBMetricTool
+                    # Try refactored version first
+                    try:
+                        from langchain_iceberg.tools.duckdb_metric_tool_refactored import DuckDBMetricTool
+                    except ImportError:
+                        # Fallback to original version
+                        from langchain_iceberg.tools.duckdb_metric_tool import DuckDBMetricTool
                     tool = DuckDBMetricTool(
                         catalog=catalog,
                         catalog_config=catalog_config or {},
@@ -322,17 +328,30 @@ class MetricToolGenerator:
                     )
                     tools.append(tool)
                     continue
-                except (ImportError, AttributeError):
-                    # DuckDB not available or tool not implemented - fall back to regular tool
-                    pass
+                except ImportError as e:
+                    # DuckDB not available - warn and skip SQL metrics
+                    import warnings
+                    warnings.warn(
+                        f"Metric '{metric_config['name']}' requires DuckDB but it's not installed. "
+                        f"Install with: pip install duckdb>=0.10.0 sqlparse>=0.4.0"
+                    )
+                    # For formula metrics, skip entirely (can't execute without DuckDB)
+                    if has_formula:
+                        continue
+                except Exception as e:
+                    import warnings
+                    warnings.warn(f"Failed to create DuckDB tool for '{metric_config['name']}': {e}")
+                    if has_formula:
+                        continue
             
-            # Use standard PyIceberg-based tool
-            tool = MetricTool(
-                catalog=catalog,
-                metric_config=metric_config,
-                semantic_config=semantic_config,
-            )
-            tools.append(tool)
+            # Use standard PyIceberg-based tool for simple metrics
+            if not has_formula:  # Only create PyIceberg tool if not a formula metric
+                tool = MetricTool(
+                    catalog=catalog,
+                    metric_config=metric_config,
+                    semantic_config=semantic_config,
+                )
+                tools.append(tool)
 
         return tools
 
