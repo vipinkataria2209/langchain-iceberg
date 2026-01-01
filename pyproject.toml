@@ -33,6 +33,11 @@ dependencies = [
     "pyarrow>=14.0",
     "pyyaml>=6.0",
     "duckdb>=0.10.0",
+    "sqlparse>=0.4.0",
+    "sqlalchemy>=2.0.0",
+    "langchain-openai>=1.1.6",
+    "langchain>=1.2.0",
+    "langchainhub>=0.1.21",
 ]
 
 [project.optional-dependencies]
