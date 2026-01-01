@@ -1,2 +1,1 @@
-"""Tests for langchain-iceberg."""
-
+"""Tests for langchain-iceberg refactored DuckDB tools."""
