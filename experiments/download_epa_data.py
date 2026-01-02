@@ -60,7 +60,15 @@ class EPADataDownloader:
         """
         Download Site Listing and Monitor Listing files from EPA metadata page.
         
-        Source: https://aqs.epa.gov/aqsweb/airdata/download_files.html#Meta
+        Downloads from: https://aqs.epa.gov/aqsweb/airdata/download_files.html#Meta
+        
+        Files downloaded:
+        - aqs_sites.zip → extracts to aqs_sites.csv (20,952 rows, 993 KB)
+        - aqs_monitors.zip → extracts to aqs_monitors.csv (368,480 rows, 6,727 KB)
+        
+        URLs:
+        - https://aqs.epa.gov/aqsweb/airdata/aqs_sites.zip
+        - https://aqs.epa.gov/aqsweb/airdata/aqs_monitors.zip
         
         Returns:
             Dictionary with download results
@@ -72,20 +80,31 @@ class EPADataDownloader:
         }
         
         # Files from EPA metadata page (Site and Monitor Descriptions section)
+        # Source: https://aqs.epa.gov/aqsweb/airdata/download_files.html#Meta
+        # ZIP files extract to: aqs_sites.csv and aqs_monitors.csv
         files = [
-            ("aqs_sites.zip", "Site Listing (20,952 rows)"),
-            ("aqs_monitors.zip", "Monitor Listing (368,480 rows)"),
+            ("aqs_sites.zip", "Site Listing", "aqs_sites.csv"),
+            ("aqs_monitors.zip", "Monitor Listing", "aqs_monitors.csv"),
         ]
         
         print("=" * 70)
         print("Downloading Site and Monitor Information")
+        print("Source: https://aqs.epa.gov/aqsweb/airdata/download_files.html#Meta")
         print("=" * 70)
         
-        for filename, description in files:
+        for filename, description, extracted_csv in files:
             url = f"{self.BASE_URL}/{filename}"
             output_path = self.output_dir / filename
             
-            # Skip if already downloaded
+            # Check if CSV already extracted (skip download if CSV exists)
+            csv_path = self.output_dir / extracted_csv
+            if csv_path.exists():
+                print(f"  ⏭️  Already extracted: {extracted_csv} ({description})")
+                results["downloaded"].append(str(output_path))
+                results["extracted"].append(str(csv_path))
+                continue
+            
+            # Skip if ZIP already downloaded
             if output_path.exists():
                 print(f"  ⏭️  Already exists: {filename} ({description})")
                 results["downloaded"].append(str(output_path))
@@ -94,6 +113,7 @@ class EPADataDownloader:
                 continue
             
             print(f"  📥 Downloading: {filename} ({description})")
+            print(f"     Will extract to: {extracted_csv}")
             print(f"     Connecting to {self.BASE_URL}...", flush=True)
             try:
                 response = requests.get(url, stream=True, timeout=(10, 120))  # (connect timeout, read timeout)

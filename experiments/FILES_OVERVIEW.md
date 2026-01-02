@@ -1,10 +1,16 @@
 # Experiments Folder - Files Overview
 
 ## Table of Contents
-- [Python Scripts](#python-scripts)
-- [Configuration Files](#configuration-files)
-- [Query Files](#query-files)
-- [Documentation](#documentation)
+- [Experiments Folder - Files Overview](#experiments-folder---files-overview)
+  - [Table of Contents](#table-of-contents)
+  - [Python Scripts](#python-scripts)
+  - [Configuration Files](#configuration-files)
+  - [Query Files](#query-files)
+  - [Documentation](#documentation)
+  - [Workflow Summary](#workflow-summary)
+    - [Typical Workflow:](#typical-workflow)
+    - [Quick Verification:](#quick-verification)
+  - [File Dependencies](#file-dependencies)
 
 ---
 
