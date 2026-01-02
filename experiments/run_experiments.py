@@ -81,7 +81,7 @@ def load_epa_data(data_dir: str = "data/epa", catalog_config: dict = None):
 
 def run_evaluation(
     catalog_config: dict,
-    semantic_yaml: str = "experiments/epa_semantic.yaml",
+    semantic_yaml: str = "experiments/epa_complete_semantic.yaml",
     output_dir: str = "experiments/results",
     num_queries: int = None,
 ):
@@ -169,7 +169,7 @@ def main():
     # For testing, use fewer queries. Set to None for full evaluation
     results = run_evaluation(
         catalog_config=catalog_config,
-        semantic_yaml="experiments/epa_semantic.yaml",
+        semantic_yaml="experiments/epa_complete_semantic.yaml",
         output_dir="experiments/results",
         num_queries=5,  # Change to None for full evaluation
     )

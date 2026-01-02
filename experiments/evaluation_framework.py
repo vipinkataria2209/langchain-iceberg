@@ -349,7 +349,7 @@ if __name__ == "__main__":
             "uri": "http://localhost:8181",
             "warehouse": "s3://warehouse/wh/",
         },
-        semantic_yaml="experiments/epa_semantic.yaml",
+        semantic_yaml="experiments/epa_complete_semantic.yaml",
     )
     
     # Run evaluation with subset of queries for testing

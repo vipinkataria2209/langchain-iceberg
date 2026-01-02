@@ -1,0 +1,766 @@
+# EPA Air Quality Complete Semantic Layer Configuration
+# Comprehensive schema for Sites, Monitors, and Daily Summary tables
+# Documentation: https://aqs.epa.gov/aqsweb/airdata/FileFormats.html
+#
+# This YAML defines:
+# - 3 tables: sites, monitors, daily_summary
+# - Relationships between tables
+# - Metrics for all 5 pollutants (PM2.5, Ozone, SO2, CO, NO2)
+# - Dimensions for filtering and grouping
+
+version: 1.0
+catalog: rest
+warehouse: s3://warehouse/wh/
+
+# ============================================
+# TABLES - Physical table definitions
+# ============================================
+tables:
+  # Site reference table - monitoring site locations
+  - name: sites
+    namespace: epa
+    description: "EPA monitoring site locations and metadata"
+    
+    columns:
+      - name: state_code
+        type: string
+        description: "FIPS state code (2 digits)"
+        pii: false
+        
+      - name: county_code
+        type: string
+        description: "FIPS county code (3 digits)"
+        pii: false
+        
+      - name: site_number
+        type: string
+        description: "Site number within county (4 digits)"
+        pii: false
+        
+      - name: latitude
+        type: double
+        description: "Site latitude coordinate"
+        
+      - name: longitude
+        type: double
+        description: "Site longitude coordinate"
+        
+      - name: datum
+        type: string
+        description: "Coordinate datum (WGS84, NAD83, etc.)"
+        
+      - name: elevation
+        type: int
+        description: "Site elevation in meters"
+        
+      - name: land_use
+        type: string
+        description: "Land use type (RESIDENTIAL, AGRICULTURAL, COMMERCIAL, etc.)"
+        
+      - name: location_setting
+        type: string
+        description: "Location setting (URBAN, SUBURBAN, RURAL, etc.)"
+        
+      - name: site_established_date
+        type: date
+        description: "Date when site was established"
+        
+      - name: site_closed_date
+        type: date
+        description: "Date when site was closed (nullable)"
+        
+      - name: gmt_offset
+        type: int
+        description: "GMT offset in hours"
+        
+      - name: owning_agency
+        type: string
+        description: "Agency that owns the monitoring site"
+        
+      - name: local_site_name
+        type: string
+        description: "Local name of the monitoring site"
+        
+      - name: address
+        type: string
+        description: "Site address"
+        
+      - name: zip_code
+        type: string
+        description: "ZIP code"
+        
+      - name: state_name
+        type: string
+        description: "State name"
+        
+      - name: county_name
+        type: string
+        description: "County name"
+        
+      - name: city_name
+        type: string
+        description: "City name"
+        
+      - name: cbsa_name
+        type: string
+        description: "Core Based Statistical Area name"
+        
+      - name: tribe_name
+        type: string
+        description: "Tribal name (if applicable)"
+        
+      - name: extraction_date
+        type: date
+        description: "Date when data was extracted from EPA"
+
+  # Monitor reference table - monitor-specific information
+  - name: monitors
+    namespace: epa
+    description: "EPA monitoring equipment and configuration details"
+    
+    columns:
+      - name: state_code
+        type: string
+        description: "FIPS state code"
+        pii: false
+        
+      - name: county_code
+        type: string
+        description: "FIPS county code"
+        pii: false
+        
+      - name: site_number
+        type: string
+        description: "Site number within county"
+        pii: false
+        
+      - name: parameter_code
+        type: string
+        description: "EPA parameter code (e.g., 88101 for PM2.5)"
+        pii: false
+        
+      - name: parameter_name
+        type: string
+        description: "Name of the pollutant/parameter"
+        
+      - name: poc
+        type: int
+        description: "Parameter Occurrence Code (multiple monitors per site)"
+        
+      - name: latitude
+        type: double
+        description: "Monitor latitude coordinate"
+        
+      - name: longitude
+        type: double
+        description: "Monitor longitude coordinate"
+        
+      - name: datum
+        type: string
+        description: "Coordinate datum"
+        
+      - name: first_year_of_data
+        type: int
+        description: "First year this monitor collected data"
+        
+      - name: last_sample_date
+        type: date
+        description: "Last date this monitor collected data"
+        
+      - name: monitor_type
+        type: string
+        description: "Type of monitor (SLAMS, NAMS, PAMS, OTHER)"
+        
+      - name: networks
+        type: string
+        description: "Monitoring networks this monitor belongs to"
+        
+      - name: reporting_agency
+        type: string
+        description: "Agency that reports data from this monitor"
+        
+      - name: pqao
+        type: string
+        description: "Primary Quality Assurance Organization"
+        
+      - name: collecting_agency
+        type: string
+        description: "Agency that collects data from this monitor"
+        
+      - name: monitoring_objective
+        type: string
+        description: "Objective of monitoring (HIGHEST CONCENTRATION, POPULATION EXPOSURE, etc.)"
+        
+      - name: last_method_code
+        type: string
+        description: "Last method code used"
+        
+      - name: last_method
+        type: string
+        description: "Last method name/description"
+        
+      - name: measurement_scale
+        type: string
+        description: "Measurement scale (NEIGHBORHOOD, URBAN SCALE, etc.)"
+        
+      - name: measurement_scale_definition
+        type: string
+        description: "Measurement scale definition (e.g., '500 M TO 4KM')"
+        
+      - name: naaqs_primary_monitor
+        type: string
+        description: "Whether this is a NAAQS primary monitor"
+        
+      - name: qa_primary_monitor
+        type: string
+        description: "Whether this is a QA primary monitor"
+        
+      - name: local_site_name
+        type: string
+        description: "Local site name"
+        
+      - name: address
+        type: string
+        description: "Site address"
+        
+      - name: state_name
+        type: string
+        description: "State name"
+        
+      - name: county_name
+        type: string
+        description: "County name"
+        
+      - name: city_name
+        type: string
+        description: "City name"
+        
+      - name: cbsa_name
+        type: string
+        description: "Core Based Statistical Area name"
+        
+      - name: extraction_date
+        type: date
+        description: "Date when data was extracted"
+
+  # Daily summary table - time-series measurement data
+  - name: daily_summary
+    namespace: epa
+    description: "EPA Air Quality daily summary measurements for all pollutants"
+    
+    columns:
+      - name: state_code
+        type: string
+        description: "FIPS state code"
+        pii: false
+        partition: false
+        
+      - name: county_code
+        type: string
+        description: "FIPS county code"
+        pii: false
+        
+      - name: site_num
+        type: string
+        description: "Site number within county"
+        pii: false
+        
+      - name: parameter_code
+        type: string
+        description: "EPA parameter code (88101=PM2.5, 44201=Ozone, 42401=SO2, 42101=CO, 42602=NO2)"
+        pii: false
+        
+      - name: poc
+        type: int
+        description: "Parameter Occurrence Code"
+        pii: false
+        
+      - name: latitude
+        type: double
+        description: "Monitoring site latitude"
+        
+      - name: longitude
+        type: double
+        description: "Monitoring site longitude"
+        
+      - name: datum
+        type: string
+        description: "Coordinate datum"
+        
+      - name: parameter_name
+        type: string
+        description: "Name of the pollutant/parameter"
+        
+      - name: sample_duration
+        type: string
+        description: "Sample duration (e.g., '1 HOUR', '24 HOUR', '8-HR RUN AVG')"
+        
+      - name: pollutant_standard
+        type: string
+        description: "Pollutant standard applied"
+        
+      - name: date_local
+        type: date
+        description: "Date of measurement in local time"
+        partition: true
+        
+      - name: units_of_measure
+        type: string
+        description: "Units of measurement (e.g., 'Micrograms/cubic meter (LC)', 'Parts per million')"
+        
+      - name: event_type
+        type: string
+        description: "Event type (None, Exception, etc.)"
+        
+      - name: observation_count
+        type: int
+        description: "Number of observations used in calculation"
+        
+      - name: observation_percent
+        type: double
+        description: "Percentage of observations used"
+        
+      - name: arithmetic_mean
+        type: double
+        description: "Daily arithmetic mean concentration"
+        
+      - name: first_max_value
+        type: double
+        description: "First maximum value for the day"
+        
+      - name: first_max_hour
+        type: int
+        description: "Hour when first maximum occurred (0-23)"
+        
+      - name: aqi
+        type: int
+        description: "Air Quality Index value (0-500)"
+        
+      - name: method_code
+        type: string
+        description: "Method code used for measurement"
+        
+      - name: method_name
+        type: string
+        description: "Method name/description"
+        
+      - name: local_site_name
+        type: string
+        description: "Local site name"
+        
+      - name: address
+        type: string
+        description: "Site address"
+        
+      - name: state_name
+        type: string
+        description: "State name"
+        
+      - name: county_name
+        type: string
+        description: "County name"
+        
+      - name: city_name
+        type: string
+        description: "City name"
+        
+      - name: cbsa_name
+        type: string
+        description: "Core Based Statistical Area name"
+        
+      - name: date_of_last_change
+        type: timestamp
+        description: "Date when record was last changed"
+
+# ============================================
+# RELATIONSHIPS - Links between tables
+# ============================================
+# IMPORTANT: EPA tables use composite keys. The relationships below specify
+# the primary identifying column, but full JOINs require matching on ALL key components:
+#
+# daily_to_site JOIN condition:
+#   daily_summary.state_code = sites.state_code AND
+#   daily_summary.county_code = sites.county_code AND
+#   daily_summary.site_num = sites.site_number
+#
+# daily_to_monitor JOIN condition:
+#   daily_summary.state_code = monitors.state_code AND
+#   daily_summary.county_code = monitors.county_code AND
+#   daily_summary.site_num = monitors.site_number AND
+#   daily_summary.parameter_code = monitors.parameter_code AND
+#   daily_summary.poc = monitors.poc
+#
+# site_to_monitor JOIN condition:
+#   sites.state_code = monitors.state_code AND
+#   sites.county_code = monitors.county_code AND
+#   sites.site_number = monitors.site_number
+relationships:
+  - name: daily_to_site
+    type: many_to_one
+    from_table: epa.daily_summary
+    from_column: site_num
+    to_table: epa.sites
+    to_column: site_number
+    description: "Link daily measurements to site locations. Composite key: (state_code, county_code, site_num/site_number)"
+    
+  - name: daily_to_monitor
+    type: many_to_one
+    from_table: epa.daily_summary
+    from_column: parameter_code
+    to_table: epa.monitors
+    to_column: parameter_code
+    description: "Link daily measurements to monitor configurations. Composite key: (state_code, county_code, site_num/site_number, parameter_code, poc)"
+    
+  - name: site_to_monitor
+    type: one_to_many
+    from_table: epa.sites
+    from_column: site_number
+    to_table: epa.monitors
+    to_column: site_number
+    description: "Link sites to their monitors. Composite key: (state_code, county_code, site_number)"
+
+# ============================================
+# DIMENSIONS - How to slice/filter data
+# ============================================
+dimensions:
+  - name: state
+    description: "State where monitoring site is located"
+    table: daily_summary
+    column: state_name
+    type: categorical
+    
+  - name: county
+    description: "County where monitoring site is located"
+    table: daily_summary
+    column: county_name
+    type: categorical
+    
+  - name: city
+    description: "City where monitoring site is located"
+    table: daily_summary
+    column: city_name
+    type: categorical
+    
+  - name: cbsa
+    description: "Core Based Statistical Area (metropolitan area)"
+    table: daily_summary
+    column: cbsa_name
+    type: categorical
+    
+  - name: pollutant
+    description: "Pollutant type"
+    table: daily_summary
+    column: parameter_name
+    type: categorical
+    values:
+      "PM2.5 - Local Conditions": "PM2.5"
+      "Ozone": "Ozone"
+      "Sulfur dioxide": "SO2"
+      "Sulfur dioxide (SO2)": "SO2"
+      "Carbon monoxide": "CO"
+      "Nitrogen dioxide (NO2)": "NO2"
+      "PM10 Total 0-10um STP": "PM10"
+      
+  - name: parameter_code
+    description: "EPA parameter code"
+    table: daily_summary
+    column: parameter_code
+    type: categorical
+    values:
+      "88101": "PM2.5"
+      "44201": "Ozone"
+      "42401": "SO2"
+      "42101": "CO"
+      "42602": "NO2"
+      
+  - name: measurement_date
+    description: "Date of air quality measurement"
+    table: daily_summary
+    column: date_local
+    type: datetime
+    granularities:
+      - day
+      - week
+      - month
+      - quarter
+      - year
+    time_travel: true
+    
+  - name: land_use
+    description: "Land use type at monitoring site"
+    table: sites
+    column: land_use
+    type: categorical
+    values:
+      "RESIDENTIAL": "Residential"
+      "AGRICULTURAL": "Agricultural"
+      "COMMERCIAL": "Commercial"
+      "INDUSTRIAL": "Industrial"
+      "MIXED": "Mixed"
+      
+  - name: location_setting
+    description: "Location setting type"
+    table: sites
+    column: location_setting
+    type: categorical
+    values:
+      "URBAN": "Urban"
+      "SUBURBAN": "Suburban"
+      "RURAL": "Rural"
+
+# ============================================
+# METRICS - Business calculations
+# ============================================
+metrics:
+  # PM2.5 Metrics
+  - name: avg_pm25_concentration
+    description: "Average PM2.5 concentration in micrograms per cubic meter"
+    type: avg
+    expression:
+      table: daily_summary
+      aggregation: avg
+      column: arithmetic_mean
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "88101"
+    unit: "μg/m³"
+    format: "{:.2f}"
+    
+  - name: max_pm25_concentration
+    description: "Maximum PM2.5 concentration"
+    type: max
+    expression:
+      table: daily_summary
+      aggregation: max
+      column: first_max_value
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "88101"
+    unit: "μg/m³"
+    format: "{:.2f}"
+    
+  - name: pm25_measurement_count
+    description: "Number of PM2.5 measurements"
+    type: count
+    expression:
+      table: daily_summary
+      aggregation: count
+      column: arithmetic_mean
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "88101"
+          
+  # Ozone Metrics
+  - name: avg_ozone_concentration
+    description: "Average Ozone concentration"
+    type: avg
+    expression:
+      table: daily_summary
+      aggregation: avg
+      column: arithmetic_mean
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "44201"
+    unit: "ppm"
+    format: "{:.3f}"
+    
+  - name: max_ozone_concentration
+    description: "Maximum Ozone concentration"
+    type: max
+    expression:
+      table: daily_summary
+      aggregation: max
+      column: first_max_value
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "44201"
+    unit: "ppm"
+    format: "{:.3f}"
+    
+  # SO2 (Sulfur Dioxide) Metrics
+  - name: avg_so2_concentration
+    description: "Average SO2 concentration"
+    type: avg
+    expression:
+      table: daily_summary
+      aggregation: avg
+      column: arithmetic_mean
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "42401"
+    unit: "ppm"
+    format: "{:.3f}"
+    
+  - name: max_so2_concentration
+    description: "Maximum SO2 concentration"
+    type: max
+    expression:
+      table: daily_summary
+      aggregation: max
+      column: first_max_value
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "42401"
+    unit: "ppm"
+    format: "{:.3f}"
+    
+  # CO (Carbon Monoxide) Metrics
+  - name: avg_co_concentration
+    description: "Average CO concentration"
+    type: avg
+    expression:
+      table: daily_summary
+      aggregation: avg
+      column: arithmetic_mean
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "42101"
+    unit: "ppm"
+    format: "{:.2f}"
+    
+  - name: max_co_concentration
+    description: "Maximum CO concentration"
+    type: max
+    expression:
+      table: daily_summary
+      aggregation: max
+      column: first_max_value
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "42101"
+    unit: "ppm"
+    format: "{:.2f}"
+    
+  # NO2 (Nitrogen Dioxide) Metrics
+  - name: avg_no2_concentration
+    description: "Average NO2 concentration"
+    type: avg
+    expression:
+      table: daily_summary
+      aggregation: avg
+      column: arithmetic_mean
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "42602"
+    unit: "ppm"
+    format: "{:.3f}"
+    
+  - name: max_no2_concentration
+    description: "Maximum NO2 concentration"
+    type: max
+    expression:
+      table: daily_summary
+      aggregation: max
+      column: first_max_value
+      filters:
+        - column: parameter_code
+          operator: "=="
+          value: "42602"
+    unit: "ppm"
+    format: "{:.3f}"
+    
+  # General Metrics
+  - name: avg_aqi
+    description: "Average Air Quality Index"
+    type: avg
+    expression:
+      table: daily_summary
+      aggregation: avg
+      column: aqi
+      filters:
+        - column: aqi
+          operator: "!="
+          value: null
+    format: "{:.1f}"
+    
+  - name: max_aqi
+    description: "Maximum Air Quality Index"
+    type: max
+    expression:
+      table: daily_summary
+      aggregation: max
+      column: aqi
+      filters:
+        - column: aqi
+          operator: "!="
+          value: null
+    format: "{:.0f}"
+    
+  - name: measurement_count
+    description: "Total number of air quality measurements"
+    type: count
+    expression:
+      table: daily_summary
+      aggregation: count
+      column: date_local
+      
+  - name: unhealthy_days_count
+    description: "Number of days with AQI > 100 (unhealthy for sensitive groups)"
+    type: count
+    expression:
+      table: daily_summary
+      aggregation: count
+      column: aqi
+      filters:
+        - column: aqi
+          operator: ">"
+          value: 100
+          
+  - name: very_unhealthy_days_count
+    description: "Number of days with AQI > 200 (very unhealthy)"
+    type: count
+    expression:
+      table: daily_summary
+      aggregation: count
+      column: aqi
+      filters:
+        - column: aqi
+          operator: ">"
+          value: 200
+          
+  - name: hazardous_days_count
+    description: "Number of days with AQI > 300 (hazardous)"
+    type: count
+    expression:
+      table: daily_summary
+      aggregation: count
+      column: aqi
+      filters:
+        - column: aqi
+          operator: ">"
+          value: 300
+          
+  # Site-related metrics (requires JOIN)
+  - name: active_sites_count
+    description: "Number of active monitoring sites"
+    type: count
+    expression:
+      table: sites
+      aggregation: count
+      column: site_number
+      filters:
+        - column: site_closed_date
+          operator: "=="
+          value: null
+    requires_join: false
+    
+  - name: sites_by_state
+    description: "Number of monitoring sites per state"
+    type: count
+    expression:
+      table: sites
+      aggregation: count
+      column: site_number
+    group_by: state_name
+    requires_join: false
+
