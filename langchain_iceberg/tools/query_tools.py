@@ -56,8 +56,11 @@ class QueryTool(IcebergBaseTool):
     - iceberg_query(table_id="epa.daily_summary", filters="parameter_code = '88101'", aggregation="avg", aggregation_column="arithmetic_mean", group_by=["state_code"], order_by="avg_arithmetic_mean", order_direction="desc", limit=3)
     - iceberg_query(table_id="sales.orders", aggregation="sum", aggregation_column="amount", group_by=["customer_id"], order_by="sum_amount", limit=10)
     
-    For JOINs across multiple tables: Use iceberg_sql_query tool instead (requires DuckDB).
-    Example: iceberg_sql_query(sql_query="SELECT s.location_setting, AVG(d.arithmetic_mean) FROM epa.daily_summary d JOIN epa.sites s ON d.state_code = s.state_code GROUP BY s.location_setting")
+    For advanced SQL features (CTEs, window functions, subqueries, JOINs): Use iceberg_sql_query tool instead (requires DuckDB).
+    Examples:
+    - JOIN: iceberg_sql_query(sql_query="SELECT s.location_setting, AVG(d.arithmetic_mean) FROM epa.daily_summary d JOIN epa.sites s ON d.state_code = s.state_code GROUP BY s.location_setting")
+    - CTE (single table): iceberg_sql_query(sql_query="WITH monthly AS (SELECT SUBSTRING(date_local, 1, 7) as month, AVG(arithmetic_mean) as avg FROM epa.daily_summary WHERE parameter_code = '88101' GROUP BY month) SELECT * FROM monthly WHERE avg > 10")
+    - Window function: iceberg_sql_query(sql_query="SELECT state_code, arithmetic_mean, ROW_NUMBER() OVER (PARTITION BY state_code ORDER BY arithmetic_mean DESC) as rank FROM epa.daily_summary WHERE parameter_code = '88101'")
 
     Regular query examples:
     - iceberg_query(table_id="sales.orders", limit=10)

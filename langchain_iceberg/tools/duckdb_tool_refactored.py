@@ -16,22 +16,44 @@ class DuckDBQueryTool(DuckDBExecutorBase):
 
     name: str = "iceberg_sql_query"
     description: str = """
-    Execute SQL queries with JOINs across multiple Iceberg tables using DuckDB.
+    Execute SQL queries using DuckDB with full SQL support (CTEs, window functions, JOINs, subqueries).
     
     USE THIS TOOL when you need to:
     - Join 2+ tables (REQUIRED for any JOIN operations)
+    - CTEs (Common Table Expressions) - even on single tables
+    - Window functions (ROW_NUMBER, RANK, OVER, etc.) - even on single tables
+    - Subqueries (nested SELECT statements)
     - Complex aggregations across multiple tables
     - GROUP BY with JOINs
-    - Window functions or CTEs
-    - Subqueries
     - Custom queries not covered by pre-defined metrics
     
     IMPORTANT: 
-    - For single-table queries, use iceberg_query tool instead
+    - For simple single-table queries (filters, basic aggregations), use iceberg_query tool (faster)
+    - For advanced SQL features (CTEs, window functions, subqueries) on ANY table, use this tool
     - For JOINs, you MUST use this tool (iceberg_sql_query)
     - Tables are referenced as namespace.table_name (e.g., "epa.daily_summary")
     - DuckDB reads directly from Iceberg files (no data copying)
     - Predicates are pushed down to file level for performance
+    
+    CTE Example (single table):
+    ```
+    iceberg_sql_query(
+        sql_query=\"\"\"
+            WITH monthly_avg AS (
+                SELECT 
+                    SUBSTRING(date_local, 1, 7) as month,
+                    AVG(arithmetic_mean) as avg_pm25
+                FROM epa.daily_summary
+                WHERE parameter_code = '88101'
+                GROUP BY SUBSTRING(date_local, 1, 7)
+            )
+            SELECT month, avg_pm25
+            FROM monthly_avg
+            WHERE avg_pm25 > 10
+            ORDER BY month
+        \"\"\"
+    )
+    ```
     
     JOIN with GROUP BY Example:
     ```
