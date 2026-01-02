@@ -33,16 +33,23 @@ class QueryTool(IcebergBaseTool):
         table_id (required): Format "namespace.table_name"
         columns (optional): List of columns to select (default: all columns)
         filters (optional): Filter expression (e.g., "status = 'completed' AND amount > 100")
-        limit (optional): Max rows to return (default: 100)
+        limit (optional): Max rows to return (default: 100). Use None or 0 for no limit (for aggregations)
+        aggregation (optional): Aggregation function - "avg", "sum", "count", "min", "max"
+        aggregation_column (optional): Column name for aggregation (required for avg, sum, min, max)
 
-    Output: Query results as formatted table
+    Output: Query results as formatted table, or aggregated value if aggregation is specified
 
     Filter operators supported:
     - =, !=, >, >=, <, <=
     - AND, OR
     - String values should be in quotes: 'value'
 
-    Example usage:
+    Aggregation examples:
+    - iceberg_query(table_id="epa.daily_summary", filters="parameter_code = '88101'", aggregation="avg", aggregation_column="arithmetic_mean")
+    - iceberg_query(table_id="sales.orders", filters="status = 'completed'", aggregation="sum", aggregation_column="amount")
+    - iceberg_query(table_id="sales.orders", aggregation="count")
+
+    Regular query examples:
     - iceberg_query(table_id="sales.orders", limit=10)
     - iceberg_query(table_id="sales.orders", columns=["order_id", "amount"], filters="amount > 100")
     - iceberg_query(table_id="sales.orders", filters="status = 'completed' AND amount > 100", limit=50)
@@ -66,6 +73,8 @@ class QueryTool(IcebergBaseTool):
         columns: Optional[List[str]] = None,
         filters: Optional[str] = None,
         limit: int = 100,
+        aggregation: Optional[str] = None,
+        aggregation_column: Optional[str] = None,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -101,15 +110,36 @@ class QueryTool(IcebergBaseTool):
                 filters = kwargs.get("filters")
             if limit == 100:
                 limit = kwargs.get("limit", 100)
+            if aggregation is None:
+                aggregation = kwargs.get("aggregation")
+            if aggregation_column is None:
+                aggregation_column = kwargs.get("aggregation_column")
             
             namespace, table_name = validate_table_id(table_id)
             filters = validate_filter_expression(filters)
 
+            # Validate aggregation parameters
+            if aggregation:
+                aggregation = aggregation.lower()
+                valid_aggregations = ["avg", "sum", "count", "min", "max"]
+                if aggregation not in valid_aggregations:
+                    raise IcebergInvalidQueryError(
+                        f"Invalid aggregation '{aggregation}'. Must be one of: {valid_aggregations}"
+                    )
+                if aggregation in ["avg", "sum", "min", "max"] and not aggregation_column:
+                    raise IcebergInvalidQueryError(
+                        f"Aggregation '{aggregation}' requires 'aggregation_column' parameter"
+                    )
+                # For aggregations, remove limit to get all data
+                if limit == 100:  # Default limit
+                    limit = None  # No limit for aggregations
+
             # Validate limit
-            if limit <= 0:
-                raise IcebergInvalidQueryError(f"Limit must be positive, got: {limit}")
-            if limit > self.max_rows_per_query:
-                limit = self.max_rows_per_query
+            if limit is not None:
+                if limit <= 0:
+                    raise IcebergInvalidQueryError(f"Limit must be positive, got: {limit}")
+                if limit > self.max_rows_per_query:
+                    limit = self.max_rows_per_query
 
             # Load table
             try:
@@ -171,22 +201,72 @@ class QueryTool(IcebergBaseTool):
             if arrow_table and len(arrow_table) > 0:
                 if HAS_PANDAS:
                     df = arrow_table.to_pandas()
-                    # Apply limit after fetching (PyIceberg doesn't support limit in scan builder)
-                    if limit is not None and limit > 0 and len(df) > limit:
-                        df = df.head(limit)
                 else:
                     # Fallback: use PyArrow directly
                     import pyarrow as pa
-                    if limit is not None and limit > 0:
-                        df = arrow_table.slice(0, limit).to_pandas() if HAS_PANDAS else arrow_table.slice(0, limit)
-                    else:
-                        df = arrow_table
+                    df = arrow_table
             else:
                 if HAS_PANDAS:
                     df = pd.DataFrame()
                 else:
                     import pyarrow as pa
                     df = pa.Table.from_arrays([], names=[])
+
+            # Handle aggregations
+            if aggregation:
+                if not HAS_PANDAS:
+                    raise IcebergInvalidQueryError(
+                        "Aggregations require pandas. Install pandas to use aggregation functions."
+                    )
+                
+                # Perform aggregation
+                if aggregation == "count":
+                    if aggregation_column and aggregation_column in df.columns:
+                        result_value = df[aggregation_column].count()
+                    else:
+                        result_value = len(df)
+                elif aggregation == "sum":
+                    if aggregation_column not in df.columns:
+                        raise IcebergInvalidQueryError(
+                            f"Column '{aggregation_column}' not found for sum aggregation"
+                        )
+                    result_value = float(df[aggregation_column].sum())
+                elif aggregation == "avg":
+                    if aggregation_column not in df.columns:
+                        raise IcebergInvalidQueryError(
+                            f"Column '{aggregation_column}' not found for avg aggregation"
+                        )
+                    result_value = float(df[aggregation_column].mean())
+                elif aggregation == "min":
+                    if aggregation_column not in df.columns:
+                        raise IcebergInvalidQueryError(
+                            f"Column '{aggregation_column}' not found for min aggregation"
+                        )
+                    result_value = float(df[aggregation_column].min())
+                elif aggregation == "max":
+                    if aggregation_column not in df.columns:
+                        raise IcebergInvalidQueryError(
+                            f"Column '{aggregation_column}' not found for max aggregation"
+                        )
+                    result_value = float(df[aggregation_column].max())
+                
+                execution_time = (time.time() - start_time) * 1000  # Convert to ms
+                result = f"{aggregation.upper()}({aggregation_column if aggregation_column else 'rows'}): {result_value:.3f}"
+                if execution_time > 1000:
+                    result += f"\n(Executed in {execution_time/1000:.2f}s)"
+                else:
+                    result += f"\n(Executed in {execution_time:.0f}ms)"
+                
+                return result
+
+            # Regular query - apply limit after fetching
+            if HAS_PANDAS:
+                if limit is not None and limit > 0 and len(df) > limit:
+                    df = df.head(limit)
+            else:
+                import pyarrow as pa
+                if limit is not None and limit > 0:
+                    df = arrow_table.slice(0, limit)
 
             # Format results
             execution_time = (time.time() - start_time) * 1000  # Convert to ms

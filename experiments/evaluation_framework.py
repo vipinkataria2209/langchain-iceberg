@@ -14,8 +14,24 @@ from pathlib import Path
 
 from langchain_iceberg import IcebergToolkit
 from langchain_openai import ChatOpenAI
-from langchain.agents import create_react_agent, AgentExecutor
-from langchain import hub
+try:
+    from langchain.agents import create_react_agent, AgentExecutor
+except ImportError:
+    # For langchain 1.2.0+, use create_agent and different executor
+    try:
+        from langchain.agents import create_agent
+        from langchain_core.runnables import Runnable
+        # create_react_agent = create_agent  # Alias for compatibility
+        CREATE_AGENT_AVAILABLE = True
+    except ImportError:
+        CREATE_AGENT_AVAILABLE = False
+        raise ImportError("Cannot import agent creation functions from langchain")
+try:
+    from langchain import hub
+except ImportError:
+    # For langchain 1.2.0+, use langchainhub
+    from langchainhub import Client as HubClient
+    hub = None  # Will use HubClient instead
 
 
 @dataclass
@@ -89,18 +105,138 @@ class EPAAirQualityEvaluator:
             semantic_yaml=self.semantic_yaml if use_semantic else None,
         )
 
-    def create_agent(self, toolkit: IcebergToolkit) -> AgentExecutor:
+    def create_agent(self, toolkit: IcebergToolkit):
         """Create LangChain agent with toolkit."""
         tools = toolkit.get_tools()
-        prompt = hub.pull("hwchase17/react")
-        agent = create_react_agent(self.llm, tools, prompt=prompt)
-        return AgentExecutor(
-            agent=agent,
-            tools=tools,
-            verbose=False,
-            handle_parsing_errors=True,
-            max_iterations=10,
-        )
+
+        # Enhanced system prompt for better tool usage
+        enhanced_system_prompt = """You are a helpful assistant that can query Apache Iceberg data lakes.
+You have access to tools that let you:
+1. List namespaces (databases) - use iceberg_list_namespaces
+2. List tables in a namespace - use iceberg_list_tables
+3. Get table schema - use iceberg_get_schema
+4. Query data - use iceberg_query
+
+IMPORTANT: Always use the tools to explore and answer questions. Don't ask for information you can get yourself.
+
+For EPA air quality data:
+- Namespace: 'epa'
+- Tables: 'sites', 'monitors', 'daily_summary'
+- PM2.5 parameter code: '88101'
+- Ozone parameter code: '44201'
+
+When asked about data, you should:
+1. First explore what namespaces and tables are available using iceberg_list_namespaces and iceberg_list_tables
+2. Then query the appropriate table using iceberg_query to answer the question
+3. Always use the tools - never ask for information you can get yourself
+"""
+
+        # Get prompt - try new API first, fallback to old
+        try:
+            if hub:
+                prompt = hub.pull("hwchase17/react")
+            else:
+                hub_client = HubClient()
+                prompt = hub_client.pull("hwchase17/react")
+        except Exception:
+            # Fallback: create a simple prompt
+            from langchain_core.prompts import ChatPromptTemplate
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", "You are a helpful assistant that can answer questions using available tools."),
+                ("human", "{input}"),
+                ("placeholder", "{agent_scratchpad}"),
+            ])
+
+        # Enhanced system prompt for better tool usage
+        enhanced_system_prompt = """You are a helpful assistant that can query Apache Iceberg data lakes.
+You have access to tools that let you:
+1. List namespaces (databases) - use iceberg_list_namespaces
+2. List tables in a namespace - use iceberg_list_tables  
+3. Get table schema - use iceberg_get_schema
+4. Query data - use iceberg_query
+
+IMPORTANT: Always use the tools to explore and answer questions. Don't ask for information you can get yourself.
+
+For EPA air quality data:
+- Namespace: 'epa'
+- Tables: 'sites', 'monitors', 'daily_summary'
+- PM2.5 parameter code: '88101'
+- Ozone parameter code: '44201'
+
+When asked about data, you should:
+1. First explore what namespaces and tables are available using iceberg_list_namespaces and iceberg_list_tables
+2. Then query the appropriate table using iceberg_query to answer the question
+3. Always use the tools - never ask for information you can get yourself
+"""
+
+        # Create agent - try new API first
+        try:
+            agent = create_react_agent(self.llm, tools, prompt=prompt)
+            return AgentExecutor(
+                agent=agent,
+                tools=tools,
+                verbose=False,
+                handle_parsing_errors=True,
+                max_iterations=10,
+            )
+        except (NameError, AttributeError, TypeError):
+            # Use new create_agent API for langchain 1.2.0+
+            # create_agent expects: model, tools, system_prompt (not prompt)
+            from langchain.agents import create_agent
+            # Use enhanced system prompt
+            system_prompt = enhanced_system_prompt
+
+            # create_agent returns a CompiledStateGraph (Runnable)
+            agent_runnable = create_agent(
+                model=self.llm,
+                tools=tools,
+                system_prompt=system_prompt
+            )
+
+            # Wrap in executor-like interface
+            class SimpleAgentExecutor:
+                def __init__(self, agent_runnable):
+                    self.agent_runnable = agent_runnable
+
+                def invoke(self, input_dict):
+                    # New API uses "messages" format
+                    if "input" in input_dict:
+                        result = self.agent_runnable.invoke({"messages": [("human", input_dict["input"])]})
+                    else:
+                        result = self.agent_runnable.invoke(input_dict)
+                    
+                    # Count tool calls from messages
+                    tool_call_count = 0
+                    if isinstance(result, dict) and "messages" in result:
+                        for msg in result["messages"]:
+                            # Check if message is a tool call or tool result
+                            if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                                tool_call_count += len(msg.tool_calls)
+                            elif isinstance(msg, tuple) and len(msg) > 0:
+                                # Check if it's a tool message
+                                if isinstance(msg[0], str) and ('tool' in msg[0].lower() or 'ai' in msg[0].lower()):
+                                    tool_call_count += 1
+                    
+                    # Extract output
+                    output = None
+                    if isinstance(result, dict) and "messages" in result:
+                        if result["messages"]:
+                            last_msg = result["messages"][-1]
+                            if hasattr(last_msg, 'content'):
+                                output = last_msg.content
+                            elif isinstance(last_msg, tuple):
+                                output = last_msg[1] if len(last_msg) > 1 else str(last_msg[0])
+                    
+                    if output is None:
+                        output = str(result) if not isinstance(result, dict) else result.get("output", str(result))
+                    
+                    return {
+                        "output": output,
+                        "intermediate_steps": result.get("messages", []) if isinstance(result, dict) else [],
+                        "tool_call_count": tool_call_count
+                    }
+
+            return SimpleAgentExecutor(agent_runnable)
 
     def evaluate_query(
         self,

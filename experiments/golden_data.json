@@ -1,0 +1,262 @@
+{
+  "catalog_name": "rest_epa",
+  "total_tests": 15,
+  "tests": [
+    {
+      "query_id": "catalog_001",
+      "query_type": "catalog",
+      "natural_language_query": "How many namespaces are in the catalog?",
+      "expected_result": 1,
+      "expected_result_type": "count",
+      "metadata": {
+        "namespaces": [
+          "epa"
+        ],
+        "tool": "iceberg_list_namespaces"
+      }
+    },
+    {
+      "query_id": "catalog_002",
+      "query_type": "catalog",
+      "natural_language_query": "How many tables are in the epa namespace?",
+      "expected_result": 3,
+      "expected_result_type": "count",
+      "metadata": {
+        "namespace": "epa",
+        "tables": [
+          "epa.sites",
+          "epa.monitors",
+          "epa.daily_summary"
+        ],
+        "tool": "iceberg_list_tables"
+      }
+    },
+    {
+      "query_id": "catalog_003",
+      "query_type": "catalog",
+      "natural_language_query": "List all table names in the epa namespace",
+      "expected_result": [
+        "sites",
+        "monitors",
+        "daily_summary"
+      ],
+      "expected_result_type": "list",
+      "metadata": {
+        "namespace": "epa",
+        "tool": "iceberg_list_tables"
+      }
+    },
+    {
+      "query_id": "simple_001",
+      "query_type": "simple",
+      "natural_language_query": "How many total records are in the daily_summary table?",
+      "expected_result": 15113763,
+      "expected_result_type": "count",
+      "metadata": {
+        "table": "epa.daily_summary",
+        "tool": "iceberg_query"
+      }
+    },
+    {
+      "query_id": "simple_002",
+      "query_type": "simple",
+      "natural_language_query": "How many PM2.5 measurements are in the database?",
+      "expected_result": 3539697,
+      "expected_result_type": "count",
+      "metadata": {
+        "table": "epa.daily_summary",
+        "filter": "parameter_code = '88101'",
+        "tool": "iceberg_query"
+      }
+    },
+    {
+      "query_id": "simple_003",
+      "query_type": "simple",
+      "natural_language_query": "How many Ozone measurements are in the database?",
+      "expected_result": 4320433,
+      "expected_result_type": "count",
+      "metadata": {
+        "table": "epa.daily_summary",
+        "filter": "parameter_code = '44201'",
+        "tool": "iceberg_query"
+      }
+    },
+    {
+      "query_id": "simple_004",
+      "query_type": "simple",
+      "natural_language_query": "How many air quality records are there for California?",
+      "expected_result": 2180742,
+      "expected_result_type": "count",
+      "metadata": {
+        "table": "epa.daily_summary",
+        "filter": "state_code = '6'",
+        "state": "California",
+        "tool": "iceberg_query"
+      }
+    },
+    {
+      "query_id": "agg_001",
+      "query_type": "aggregation",
+      "natural_language_query": "What is the average PM2.5 concentration across all measurements?",
+      "expected_result": 7.723,
+      "expected_result_type": "value",
+      "metadata": {
+        "table": "epa.daily_summary",
+        "filter": "parameter_code = '88101'",
+        "aggregation": "mean(arithmetic_mean)",
+        "tool": "iceberg_query"
+      }
+    },
+    {
+      "query_id": "agg_002",
+      "query_type": "aggregation",
+      "natural_language_query": "What is the average PM2.5 concentration in California?",
+      "expected_result": 9.036,
+      "expected_result_type": "value",
+      "metadata": {
+        "table": "epa.daily_summary",
+        "filter": "parameter_code = '88101' AND state_code = '6'",
+        "aggregation": "mean(arithmetic_mean)",
+        "state": "California",
+        "tool": "iceberg_query"
+      }
+    },
+    {
+      "query_id": "agg_003",
+      "query_type": "aggregation",
+      "natural_language_query": "What is the maximum Ozone concentration recorded?",
+      "expected_result": 0.215,
+      "expected_result_type": "value",
+      "metadata": {
+        "table": "epa.daily_summary",
+        "filter": "parameter_code = '44201'",
+        "aggregation": "max(first_max_value)",
+        "tool": "iceberg_query"
+      }
+    },
+    {
+      "query_id": "agg_004",
+      "query_type": "aggregation",
+      "natural_language_query": "How many different states have air quality data?",
+      "expected_result": 54,
+      "expected_result_type": "count",
+      "metadata": {
+        "table": "epa.daily_summary",
+        "aggregation": "count(distinct state_code)",
+        "tool": "iceberg_query"
+      }
+    },
+    {
+      "query_id": "agg_005",
+      "query_type": "aggregation",
+      "natural_language_query": "What are the top 3 states by average PM2.5 concentration?",
+      "expected_result": {
+        "80": 19.225,
+        "48": 9.328,
+        "5": 9.179
+      },
+      "expected_result_type": "dict",
+      "metadata": {
+        "table": "epa.daily_summary",
+        "filter": "parameter_code = '88101'",
+        "aggregation": "group by state_code, mean(arithmetic_mean), order by desc, limit 3",
+        "tool": "iceberg_query"
+      }
+    },
+    {
+      "query_id": "schema_001",
+      "query_type": "schema",
+      "natural_language_query": "How many columns are in the daily_summary table?",
+      "expected_result": 29,
+      "expected_result_type": "count",
+      "metadata": {
+        "table": "epa.daily_summary",
+        "columns": [
+          "state_code",
+          "county_code",
+          "site_num",
+          "parameter_code",
+          "poc",
+          "latitude",
+          "longitude",
+          "datum",
+          "parameter_name",
+          "sample_duration",
+          "pollutant_standard",
+          "date_local",
+          "units_of_measure",
+          "event_type",
+          "observation_count",
+          "observation_percent",
+          "arithmetic_mean",
+          "first_max_value",
+          "first_max_hour",
+          "aqi",
+          "method_code",
+          "method_name",
+          "local_site_name",
+          "address",
+          "state_name",
+          "county_name",
+          "city_name",
+          "cbsa_name",
+          "date_of_last_change"
+        ],
+        "tool": "iceberg_get_schema"
+      }
+    },
+    {
+      "query_id": "schema_002",
+      "query_type": "schema",
+      "natural_language_query": "What are the column names in the daily_summary table?",
+      "expected_result": [
+        "state_code",
+        "county_code",
+        "site_num",
+        "parameter_code",
+        "poc",
+        "latitude",
+        "longitude",
+        "datum",
+        "parameter_name",
+        "sample_duration",
+        "pollutant_standard",
+        "date_local",
+        "units_of_measure",
+        "event_type",
+        "observation_count",
+        "observation_percent",
+        "arithmetic_mean",
+        "first_max_value",
+        "first_max_hour",
+        "aqi",
+        "method_code",
+        "method_name",
+        "local_site_name",
+        "address",
+        "state_name",
+        "county_name",
+        "city_name",
+        "cbsa_name",
+        "date_of_last_change"
+      ],
+      "expected_result_type": "list",
+      "metadata": {
+        "table": "epa.daily_summary",
+        "tool": "iceberg_get_schema"
+      }
+    },
+    {
+      "query_id": "schema_003",
+      "query_type": "schema",
+      "natural_language_query": "Does the daily_summary table have a parameter_code column?",
+      "expected_result": true,
+      "expected_result_type": "boolean",
+      "metadata": {
+        "table": "epa.daily_summary",
+        "column": "parameter_code",
+        "tool": "iceberg_get_schema"
+      }
+    }
+  ]
+}

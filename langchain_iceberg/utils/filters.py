@@ -3,11 +3,28 @@
 import re
 from typing import Any, Optional
 
-import pyarrow.compute as pc
+try:
+    from pyiceberg.expressions import (
+        EqualTo,
+        NotEqualTo,
+        GreaterThan,
+        GreaterThanOrEqual,
+        LessThan,
+        LessThanOrEqual,
+        And,
+        Or,
+    )
+    from pyiceberg.expressions import literal
+    HAS_PYICEBERG_EXPRESSIONS = True
+except ImportError:
+    HAS_PYICEBERG_EXPRESSIONS = False
+    # Fallback to PyArrow if PyIceberg expressions not available
+    import pyarrow.compute as pc
+    literal = None
 
 
 class FilterBuilder:
-    """Builds PyArrow filter expressions from string representations."""
+    """Builds PyIceberg filter expressions from string representations."""
 
     @staticmethod
     def parse_filter(filter_str: str, schema: Any) -> Any:
@@ -22,7 +39,7 @@ class FilterBuilder:
             schema: PyIceberg table schema
 
         Returns:
-            PyArrow expression
+            PyIceberg expression (or PyArrow expression as fallback)
 
         Raises:
             IcebergInvalidFilterError: If filter cannot be parsed
@@ -73,7 +90,10 @@ class FilterBuilder:
             if len(conditions) > 1:
                 result = conditions[0]
                 for cond in conditions[1:]:
-                    result = pc.and_(result, cond)
+                    if HAS_PYICEBERG_EXPRESSIONS:
+                        result = And(result, cond)
+                    else:
+                        result = pc.and_(result, cond)
                 return result
             return conditions[0] if conditions else None
 
@@ -110,19 +130,36 @@ class FilterBuilder:
                 # Convert value to appropriate type
                 value = FilterBuilder._convert_value(value_str, field.field_type)
 
-                # Build PyArrow expression
-                if op == '=':
-                    return pc.equal(pc.field(column_name), value)
-                elif op == '!=':
-                    return pc.not_equal(pc.field(column_name), value)
-                elif op == '>':
-                    return pc.greater(pc.field(column_name), value)
-                elif op == '>=':
-                    return pc.greater_equal(pc.field(column_name), value)
-                elif op == '<':
-                    return pc.less(pc.field(column_name), value)
-                elif op == '<=':
-                    return pc.less_equal(pc.field(column_name), value)
+                # Build PyIceberg expression (preferred) or PyArrow expression (fallback)
+                if HAS_PYICEBERG_EXPRESSIONS:
+                    # Use PyIceberg expressions
+                    literal_value = literal(value)
+                    if op == '=':
+                        return EqualTo(column_name, literal_value)
+                    elif op == '!=':
+                        return NotEqualTo(column_name, literal_value)
+                    elif op == '>':
+                        return GreaterThan(column_name, literal_value)
+                    elif op == '>=':
+                        return GreaterThanOrEqual(column_name, literal_value)
+                    elif op == '<':
+                        return LessThan(column_name, literal_value)
+                    elif op == '<=':
+                        return LessThanOrEqual(column_name, literal_value)
+                else:
+                    # Fallback to PyArrow expressions
+                    if op == '=':
+                        return pc.equal(pc.field(column_name), value)
+                    elif op == '!=':
+                        return pc.not_equal(pc.field(column_name), value)
+                    elif op == '>':
+                        return pc.greater(pc.field(column_name), value)
+                    elif op == '>=':
+                        return pc.greater_equal(pc.field(column_name), value)
+                    elif op == '<':
+                        return pc.less(pc.field(column_name), value)
+                    elif op == '<=':
+                        return pc.less_equal(pc.field(column_name), value)
 
         # If no pattern matched, raise error
         from langchain_iceberg.exceptions import IcebergInvalidFilterError
