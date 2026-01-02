@@ -36,6 +36,9 @@ class QueryTool(IcebergBaseTool):
         limit (optional): Max rows to return (default: 100). Use None or 0 for no limit (for aggregations)
         aggregation (optional): Aggregation function - "avg", "sum", "count", "min", "max"
         aggregation_column (optional): Column name for aggregation (required for avg, sum, min, max)
+        group_by (optional): List of column names to group by (e.g., ["state_code"])
+        order_by (optional): Column name to order results by (use with group_by)
+        order_direction (optional): "asc" or "desc" for ordering (default: "desc")
 
     Output: Query results as formatted table, or aggregated value if aggregation is specified
 
@@ -48,6 +51,10 @@ class QueryTool(IcebergBaseTool):
     - iceberg_query(table_id="epa.daily_summary", filters="parameter_code = '88101'", aggregation="avg", aggregation_column="arithmetic_mean")
     - iceberg_query(table_id="sales.orders", filters="status = 'completed'", aggregation="sum", aggregation_column="amount")
     - iceberg_query(table_id="sales.orders", aggregation="count")
+    
+    GROUP BY examples:
+    - iceberg_query(table_id="epa.daily_summary", filters="parameter_code = '88101'", aggregation="avg", aggregation_column="arithmetic_mean", group_by=["state_code"], order_by="avg_arithmetic_mean", order_direction="desc", limit=3)
+    - iceberg_query(table_id="sales.orders", aggregation="sum", aggregation_column="amount", group_by=["customer_id"], order_by="sum_amount", limit=10)
 
     Regular query examples:
     - iceberg_query(table_id="sales.orders", limit=10)
@@ -75,6 +82,9 @@ class QueryTool(IcebergBaseTool):
         limit: int = 100,
         aggregation: Optional[str] = None,
         aggregation_column: Optional[str] = None,
+        group_by: Optional[List[str]] = None,
+        order_by: Optional[str] = None,
+        order_direction: Optional[str] = "desc",
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -114,6 +124,12 @@ class QueryTool(IcebergBaseTool):
                 aggregation = kwargs.get("aggregation")
             if aggregation_column is None:
                 aggregation_column = kwargs.get("aggregation_column")
+            if group_by is None:
+                group_by = kwargs.get("group_by")
+            if order_by is None:
+                order_by = kwargs.get("order_by")
+            if order_direction == "desc":
+                order_direction = kwargs.get("order_direction", "desc")
             
             namespace, table_name = validate_table_id(table_id)
             filters = validate_filter_expression(filters)
@@ -130,9 +146,21 @@ class QueryTool(IcebergBaseTool):
                     raise IcebergInvalidQueryError(
                         f"Aggregation '{aggregation}' requires 'aggregation_column' parameter"
                     )
-                # For aggregations, remove limit to get all data
+                # For aggregations, remove limit to get all data (unless group_by is used)
+                if limit == 100 and not group_by:  # Default limit, no group_by
+                    limit = None  # No limit for simple aggregations
+            
+            # Validate group_by parameters
+            if group_by:
+                if not aggregation:
+                    raise IcebergInvalidQueryError(
+                        "group_by requires an aggregation function"
+                    )
+                if not isinstance(group_by, list):
+                    group_by = [group_by]  # Convert single string to list
+                # For group_by, we'll apply limit after grouping
                 if limit == 100:  # Default limit
-                    limit = None  # No limit for aggregations
+                    limit = 100  # Keep default for grouped results
 
             # Validate limit
             if limit is not None:
@@ -219,7 +247,82 @@ class QueryTool(IcebergBaseTool):
                         "Aggregations require pandas. Install pandas to use aggregation functions."
                     )
                 
-                # Perform aggregation
+                # Handle GROUP BY aggregations
+                if group_by:
+                    # Validate group_by columns exist
+                    schema = table.schema()
+                    schema_columns = {field.name for field in schema.fields}
+                    invalid_group_cols = set(group_by) - schema_columns
+                    if invalid_group_cols:
+                        raise IcebergInvalidQueryError(
+                            f"Invalid group_by columns: {invalid_group_cols}. "
+                            f"Available columns: {sorted(schema_columns)}"
+                        )
+                    
+                    # Perform grouped aggregation
+                    grouped = df.groupby(group_by)
+                    
+                    if aggregation == "count":
+                        if aggregation_column and aggregation_column in df.columns:
+                            result_df = grouped[aggregation_column].count().reset_index()
+                            result_df.columns = group_by + [f"count_{aggregation_column}"]
+                        else:
+                            result_df = grouped.size().reset_index(name="count")
+                    elif aggregation == "sum":
+                        if aggregation_column not in df.columns:
+                            raise IcebergInvalidQueryError(
+                                f"Column '{aggregation_column}' not found for sum aggregation"
+                            )
+                        result_df = grouped[aggregation_column].sum().reset_index()
+                        result_df.columns = group_by + [f"sum_{aggregation_column}"]
+                    elif aggregation == "avg":
+                        if aggregation_column not in df.columns:
+                            raise IcebergInvalidQueryError(
+                                f"Column '{aggregation_column}' not found for avg aggregation"
+                            )
+                        result_df = grouped[aggregation_column].mean().reset_index()
+                        result_df.columns = group_by + [f"avg_{aggregation_column}"]
+                    elif aggregation == "min":
+                        if aggregation_column not in df.columns:
+                            raise IcebergInvalidQueryError(
+                                f"Column '{aggregation_column}' not found for min aggregation"
+                            )
+                        result_df = grouped[aggregation_column].min().reset_index()
+                        result_df.columns = group_by + [f"min_{aggregation_column}"]
+                    elif aggregation == "max":
+                        if aggregation_column not in df.columns:
+                            raise IcebergInvalidQueryError(
+                                f"Column '{aggregation_column}' not found for max aggregation"
+                            )
+                        result_df = grouped[aggregation_column].max().reset_index()
+                        result_df.columns = group_by + [f"max_{aggregation_column}"]
+                    
+                    # Apply ordering if specified
+                    if order_by:
+                        if order_by not in result_df.columns:
+                            # Try to find the aggregation column
+                            agg_col = next((c for c in result_df.columns if c not in group_by), None)
+                            if agg_col:
+                                order_by = agg_col
+                        if order_by in result_df.columns:
+                            ascending = order_direction.lower() != "desc"
+                            result_df = result_df.sort_values(by=order_by, ascending=ascending)
+                    
+                    # Apply limit
+                    if limit and limit > 0 and len(result_df) > limit:
+                        result_df = result_df.head(limit)
+                    
+                    # Format grouped results
+                    execution_time = (time.time() - start_time) * 1000
+                    result = ResultFormatter.format_table(result_df, limit=limit)
+                    if execution_time > 1000:
+                        result += f"\n(Executed in {execution_time/1000:.2f}s)"
+                    else:
+                        result += f"\n(Executed in {execution_time:.0f}ms)"
+                    
+                    return result
+                
+                # Simple aggregation (no group_by)
                 if aggregation == "count":
                     if aggregation_column and aggregation_column in df.columns:
                         result_value = df[aggregation_column].count()
