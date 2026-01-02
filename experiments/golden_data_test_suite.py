@@ -95,8 +95,12 @@ class GoldenDataGenerator:
         self._generate_aggregation_queries()
 
         # 4. Schema Queries
-        print("\n[4/4] Generating schema queries...")
+        print("\n[4/5] Generating schema queries...")
         self._generate_schema_queries()
+
+        # 5. JOIN Queries
+        print("\n[5/5] Generating JOIN queries...")
+        self._generate_join_queries()
 
         print(f"\n✅ Generated {len(self.results)} golden data tests")
         return self.results
@@ -408,6 +412,91 @@ class GoldenDataGenerator:
 
         except Exception as e:
             print(f"  ❌ Schema queries failed: {e}")
+
+    def _generate_join_queries(self):
+        """Generate JOIN queries using pandas merge."""
+        try:
+            # Load both tables
+            daily_table = self.catalog.load_table(("epa", "daily_summary"))
+            sites_table = self.catalog.load_table(("epa", "sites"))
+            
+            # Scan tables
+            daily_scan = daily_table.scan()
+            daily_arrow = daily_scan.to_arrow()
+            daily_df = daily_arrow.to_pandas()
+            
+            sites_scan = sites_table.scan()
+            sites_arrow = sites_scan.to_arrow()
+            sites_df = sites_arrow.to_pandas()
+            
+            # Query 1: Urban vs Rural PM2.5 comparison (JOIN + GROUP BY)
+            pm25_df = daily_df[daily_df['parameter_code'] == '88101']
+            
+            # Perform JOIN
+            joined_df = pm25_df.merge(
+                sites_df,
+                left_on=['state_code', 'county_code', 'site_num'],
+                right_on=['state_code', 'county_code', 'site_number'],
+                how='inner',
+                suffixes=('', '_site')
+            )
+            
+            # Filter for location settings
+            location_df = joined_df[joined_df['location_setting'].isin(['URBAN', 'RURAL', 'SUBURBAN'])]
+            
+            # Group by location_setting and calculate average
+            location_avg = location_df.groupby('location_setting')['arithmetic_mean'].mean().sort_values(ascending=False)
+            location_dict = {k: round(float(v), 3) for k, v in location_avg.items()}
+            
+            self.results.append(GoldenTestResult(
+                query_id="join_001",
+                query_type="join",
+                natural_language_query="Compare average PM2.5 levels between urban and rural monitoring sites",
+                expected_result=location_dict,
+                expected_result_type="dict",
+                metadata={
+                    "tables": ["epa.daily_summary", "epa.sites"],
+                    "join_on": {
+                        "state_code": "state_code",
+                        "county_code": "county_code",
+                        "site_num": "site_number"
+                    },
+                    "filter": "parameter_code = '88101' AND location_setting IN ('URBAN', 'RURAL', 'SUBURBAN')",
+                    "aggregation": "avg(arithmetic_mean) GROUP BY location_setting",
+                    "tool": "iceberg_sql_query"
+                }
+            ))
+            print(f"  ✅ join_001: Urban vs Rural PM2.5 comparison")
+            for loc, avg_val in location_dict.items():
+                print(f"     {loc}: {avg_val:.3f} μg/m³")
+            
+            # Query 2: Count of measurements by location setting
+            location_counts = location_df.groupby('location_setting').size().to_dict()
+            
+            self.results.append(GoldenTestResult(
+                query_id="join_002",
+                query_type="join",
+                natural_language_query="How many PM2.5 measurements are there for each location setting (urban, rural, suburban)?",
+                expected_result=location_counts,
+                expected_result_type="dict",
+                metadata={
+                    "tables": ["epa.daily_summary", "epa.sites"],
+                    "join_on": {
+                        "state_code": "state_code",
+                        "county_code": "county_code",
+                        "site_num": "site_number"
+                    },
+                    "filter": "parameter_code = '88101' AND location_setting IN ('URBAN', 'RURAL', 'SUBURBAN')",
+                    "aggregation": "count(*) GROUP BY location_setting",
+                    "tool": "iceberg_sql_query"
+                }
+            ))
+            print(f"  ✅ join_002: Measurement counts by location setting")
+            
+        except Exception as e:
+            print(f"  ❌ JOIN queries failed: {e}")
+            import traceback
+            traceback.print_exc()
 
     def save_to_file(self, output_file: str = "experiments/golden_data.json"):
         """Save golden data to JSON file."""

@@ -1,6 +1,6 @@
 {
   "catalog_name": "rest_epa",
-  "total_tests": 15,
+  "total_tests": 17,
   "tests": [
     {
       "query_id": "catalog_001",
@@ -256,6 +256,54 @@
         "table": "epa.daily_summary",
         "column": "parameter_code",
         "tool": "iceberg_get_schema"
+      }
+    },
+    {
+      "query_id": "join_001",
+      "query_type": "join",
+      "natural_language_query": "Compare average PM2.5 levels between urban and rural monitoring sites",
+      "expected_result": {
+        "SUBURBAN": 7.708,
+        "RURAL": 6.499
+      },
+      "expected_result_type": "dict",
+      "metadata": {
+        "tables": [
+          "epa.daily_summary",
+          "epa.sites"
+        ],
+        "join_on": {
+          "state_code": "state_code",
+          "county_code": "county_code",
+          "site_num": "site_number"
+        },
+        "filter": "parameter_code = '88101' AND location_setting IN ('URBAN', 'RURAL', 'SUBURBAN')",
+        "aggregation": "avg(arithmetic_mean) GROUP BY location_setting",
+        "tool": "iceberg_sql_query"
+      }
+    },
+    {
+      "query_id": "join_002",
+      "query_type": "join",
+      "natural_language_query": "How many PM2.5 measurements are there for each location setting (urban, rural, suburban)?",
+      "expected_result": {
+        "RURAL": 651909,
+        "SUBURBAN": 1150381
+      },
+      "expected_result_type": "dict",
+      "metadata": {
+        "tables": [
+          "epa.daily_summary",
+          "epa.sites"
+        ],
+        "join_on": {
+          "state_code": "state_code",
+          "county_code": "county_code",
+          "site_num": "site_number"
+        },
+        "filter": "parameter_code = '88101' AND location_setting IN ('URBAN', 'RURAL', 'SUBURBAN')",
+        "aggregation": "count(*) GROUP BY location_setting",
+        "tool": "iceberg_sql_query"
       }
     }
   ]

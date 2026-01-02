@@ -77,6 +77,7 @@ class EPAAirQualityEvaluator:
         semantic_yaml: Optional[str] = None,
         llm_model: str = "gpt-4",
         temperature: float = 0.0,
+        enable_sql_queries: bool = False,
     ):
         """
         Initialize evaluator.
@@ -93,6 +94,7 @@ class EPAAirQualityEvaluator:
         self.semantic_yaml = semantic_yaml
         self.llm_model = llm_model
         self.temperature = temperature
+        self.enable_sql_queries = enable_sql_queries
 
         # Initialize LLM
         self.llm = ChatOpenAI(model=llm_model, temperature=temperature)
@@ -103,6 +105,7 @@ class EPAAirQualityEvaluator:
             catalog_name=self.catalog_name,
             catalog_config=self.catalog_config,
             semantic_yaml=self.semantic_yaml if use_semantic else None,
+            enable_sql_queries=self.enable_sql_queries,
         )
 
     def create_agent(self, toolkit: IcebergToolkit):
