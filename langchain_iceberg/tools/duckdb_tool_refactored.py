@@ -18,22 +18,42 @@ class DuckDBQueryTool(DuckDBExecutorBase):
     description: str = """
     Execute SQL queries with JOINs across multiple Iceberg tables using DuckDB.
     
-    Use this when you need to:
-    - Join 2+ tables
-    - Complex aggregations across tables
+    USE THIS TOOL when you need to:
+    - Join 2+ tables (REQUIRED for any JOIN operations)
+    - Complex aggregations across multiple tables
+    - GROUP BY with JOINs
     - Window functions or CTEs
     - Subqueries
     - Custom queries not covered by pre-defined metrics
     
-    Input: 
-        sql_query (string): Standard SQL query
-        
-    Important: 
-    - Tables are referenced as namespace.table_name
+    IMPORTANT: 
+    - For single-table queries, use iceberg_query tool instead
+    - For JOINs, you MUST use this tool (iceberg_sql_query)
+    - Tables are referenced as namespace.table_name (e.g., "epa.daily_summary")
     - DuckDB reads directly from Iceberg files (no data copying)
     - Predicates are pushed down to file level for performance
     
-    Example:
+    JOIN with GROUP BY Example:
+    ```
+    iceberg_sql_query(
+        sql_query=\"\"\"
+            SELECT 
+                s.location_setting,
+                AVG(d.arithmetic_mean) as avg_pm25,
+                COUNT(*) as measurement_count
+            FROM epa.daily_summary d
+            JOIN epa.sites s ON 
+                d.state_code = s.state_code 
+                AND d.county_code = s.county_code 
+                AND d.site_num = s.site_number
+            WHERE d.parameter_code = '88101'
+            GROUP BY s.location_setting
+            ORDER BY avg_pm25 DESC
+        \"\"\"
+    )
+    ```
+    
+    Simple JOIN Example:
     ```
     iceberg_sql_query(
         sql_query=\"\"\"

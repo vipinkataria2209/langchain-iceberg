@@ -55,6 +55,9 @@ class QueryTool(IcebergBaseTool):
     GROUP BY examples:
     - iceberg_query(table_id="epa.daily_summary", filters="parameter_code = '88101'", aggregation="avg", aggregation_column="arithmetic_mean", group_by=["state_code"], order_by="avg_arithmetic_mean", order_direction="desc", limit=3)
     - iceberg_query(table_id="sales.orders", aggregation="sum", aggregation_column="amount", group_by=["customer_id"], order_by="sum_amount", limit=10)
+    
+    For JOINs across multiple tables: Use iceberg_sql_query tool instead (requires DuckDB).
+    Example: iceberg_sql_query(sql_query="SELECT s.location_setting, AVG(d.arithmetic_mean) FROM epa.daily_summary d JOIN epa.sites s ON d.state_code = s.state_code GROUP BY s.location_setting")
 
     Regular query examples:
     - iceberg_query(table_id="sales.orders", limit=10)
@@ -250,13 +253,13 @@ class QueryTool(IcebergBaseTool):
                 # Handle GROUP BY aggregations
                 if group_by:
                     # Validate group_by columns exist
-                    schema = table.schema()
-                    schema_columns = {field.name for field in schema.fields}
-                    invalid_group_cols = set(group_by) - schema_columns
+                    # Use actual dataframe columns instead of schema
+                    available_columns = set(df.columns)
+                    invalid_group_cols = set(group_by) - available_columns
                     if invalid_group_cols:
                         raise IcebergInvalidQueryError(
                             f"Invalid group_by columns: {invalid_group_cols}. "
-                            f"Available columns: {sorted(schema_columns)}"
+                            f"Available columns: {sorted(available_columns)}"
                         )
                     
                     # Perform grouped aggregation
