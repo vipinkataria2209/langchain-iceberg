@@ -213,7 +213,7 @@ class IcebergToolkit:
         # DuckDB SQL query tool (if enabled)
         if self.enable_sql_queries:
             try:
-                from langchain_iceberg.tools.duckdb_tool import DuckDBQueryTool
+                from langchain_iceberg.tools.duckdb_tool_refactored import DuckDBQueryTool
                 tools.append(
                     DuckDBQueryTool(
                         catalog=self.catalog,
