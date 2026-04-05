@@ -1,0 +1,34 @@
+flowchart TD
+    A[YAML Metric Definition] --> B[Parse metric_config]
+    B --> C{Has 'formula'<br/>field?}
+    
+    C -->|Yes| D[Requires SQL<br/>execution]
+    C -->|No| E{Has 'expression'<br/>field?}
+    
+    E -->|Yes| F[Single-table<br/>metric]
+    E -->|No| G[❌ Error:<br/>Invalid metric]
+    
+    F --> H{Check<br/>relationships}
+    H -->|Multi-table| D
+    H -->|Single-table| I[Use PyIceberg<br/>API]
+    
+    D --> J{enable_sql<br/>= true?}
+    J -->|Yes| K[Generate<br/>DuckDBMetricTool]
+    J -->|No| L[⚠️ Skip metric<br/>with warning]
+    
+    I --> M[Generate<br/>MetricTool<br/>PyIceberg-based]
+    
+    K --> N[Auto-generate<br/>Pydantic schema]
+    M --> N
+    
+    N --> O[Create LangChain tool:<br/>✓ name: get_metric_name<br/>✓ description from YAML<br/>✓ input schema<br/>✓ execution logic]
+    
+    O --> P[✅ Add to tool<br/>registry]
+    
+    style A fill:#e1f5ff
+    style P fill:#d4edda
+    style G fill:#f8d7da
+    style L fill:#fff3cd
+    style K fill:#cce5ff
+    style M fill:#cce5ff
+    style O fill:#d1ecf1

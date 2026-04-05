@@ -1,0 +1,58 @@
+sequenceDiagram
+    participant User
+    participant LLM as LLM Agent
+    participant Toolkit as Iceberg Toolkit
+    participant Semantic as Semantic Layer
+    participant PyIce as PyIceberg API
+    participant Duck as DuckDB Engine
+    participant Iceberg as Iceberg Tables
+    
+    User->>LLM: "What was average ozone<br/>in LA last month?"
+    activate LLM
+    
+    LLM->>Toolkit: Examine available tools
+    activate Toolkit
+    Toolkit->>Semantic: List metric tools
+    activate Semantic
+    Semantic-->>Toolkit: [get_avg_ozone_level(),<br/>get_pm25_by_city(), ...]
+    deactivate Semantic
+    Toolkit-->>LLM: Return tool list
+    deactivate Toolkit
+    
+    LLM->>LLM: Match intent to tool<br/>(get_avg_ozone_level)
+    LLM->>LLM: Extract parameters<br/>(city="LA", month="Nov 2024")
+    
+    LLM->>Toolkit: Invoke get_avg_ozone_level<br/>(city="LA", start="2024-11-01")
+    activate Toolkit
+    
+    Toolkit->>Semantic: Load metric definition
+    activate Semantic
+    Semantic-->>Toolkit: {table: epa.readings,<br/>column: o3_ppb,<br/>aggregation: avg}
+    deactivate Semantic
+    
+    alt Simple single-table query
+        Toolkit->>PyIce: Build type-safe filter
+        activate PyIce
+        PyIce->>Iceberg: Scan with predicates
+        activate Iceberg
+        Iceberg-->>PyIce: Arrow table
+        deactivate Iceberg
+        PyIce-->>Toolkit: Aggregated result
+        deactivate PyIce
+    else Complex multi-table query
+        Toolkit->>Duck: Execute validated SQL
+        activate Duck
+        Duck->>Iceberg: iceberg_scan()
+        activate Iceberg
+        Iceberg-->>Duck: Query result
+        deactivate Iceberg
+        Duck-->>Toolkit: DataFrame
+        deactivate Duck
+    end
+    
+    Toolkit->>Toolkit: Format result with<br/>business context
+    Toolkit-->>LLM: "48.3 ppb<br/>(EPA threshold: 70 ppb)"
+    deactivate Toolkit
+    
+    LLM-->>User: "Average ozone level in LA<br/>(Nov 2024): 48.3 ppb<br/>Status: Within limits"
+    deactivate LLM
